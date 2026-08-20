@@ -1,0 +1,40 @@
+# Migration of the allowed commands from .claude-yishaiar/settings.local.json.
+# Rules only apply when a command must run outside the workspace sandbox.
+
+prefix_rule(pattern = ["git", "rev-parse"], decision = "allow")
+prefix_rule(pattern = ["git", "status"], decision = "allow")
+prefix_rule(pattern = ["git", "diff"], decision = "allow")
+prefix_rule(pattern = ["git", "log"], decision = "allow")
+prefix_rule(pattern = ["git", "branch"], decision = "allow")
+prefix_rule(pattern = ["git", "tag"], decision = "allow")
+
+prefix_rule(pattern = ["uv", "run", "pytest"], decision = "allow")
+prefix_rule(pattern = ["uv", "run", "ruff"], decision = "allow")
+prefix_rule(pattern = ["uv", "run", "basedpyright"], decision = "allow")
+prefix_rule(pattern = ["nohup", "uv", "run", "jupyter", "lab"], decision = "allow")
+
+prefix_rule(pattern = ["ls"], decision = "allow")
+prefix_rule(pattern = ["find"], decision = "allow")
+prefix_rule(pattern = ["grep"], decision = "allow")
+prefix_rule(pattern = ["test"], decision = "allow")
+prefix_rule(pattern = ["gh", "pr", ["view", "list"]], decision = "allow")
+prefix_rule(pattern = ["gh", "repo", "view"], decision = "allow")
+
+# Auto-allowed commands used by the commit and create-PR workflows. Push and
+# merge remain intentionally unallowed because those steps require explicit user direction.
+prefix_rule(pattern = ["git", "add"], decision = "allow")
+prefix_rule(pattern = ["git", "commit"], decision = "allow")
+prefix_rule(pattern = ["git", "fetch"], decision = "allow")
+prefix_rule(pattern = ["git", "rebase"], decision = "allow")
+prefix_rule(pattern = ["uv", "sync"], decision = "allow")
+prefix_rule(pattern = ["gh", "pr", ["create", "edit"]], decision = "allow")
+
+
+# Commands that change repository, environment, remote, or arbitrary code state
+# still require an approval.
+prefix_rule(pattern = ["mkdir"], decision = "prompt")
+prefix_rule(pattern = ["docker-compose"], decision = "prompt")
+prefix_rule(pattern = ["python"], decision = "prompt")
+prefix_rule(pattern = ["python3"], decision = "prompt")
+prefix_rule(pattern = ["python3", "-"], decision = "prompt")
+prefix_rule(pattern = ["uv", "pip"], decision = "prompt")

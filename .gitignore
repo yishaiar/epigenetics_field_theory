@@ -7,5 +7,38 @@ __pycache__/
 *.pyc
 *.cfg
 *.mat
+.DS_Store
 
 
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+
+
+
+# Environments
+.env
+.venv
+
+# VS Code settings
+.vscode/
+
+local/
+/*.ipynb
+/.ipynb_checkpoints/
+/.jupyter/
+/.jupyter_ystore.db
+/*.py
+uv.lock
+
+# .claude is a personal symlink to a tracked .claude-<name>/ folder — see
+# documentation/developement.md for setup. Never commit the symlink itself.
+/.claude
+
+# CURRENT_PLAN.md is ephemeral per-worktree scratch state written by
+# plan-new-feature and read by execute-new-feature — never commit it.
+.agents/memory/CURRENT_PLAN.md
+.understand-anything/
+
+# Local Codex MCP configuration and its machine-specific runtime.
+.codex/jupyter-mcp-server-runtime/
