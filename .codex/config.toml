@@ -1,0 +1,19 @@
+personality = "pragmatic"
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+approvals_reviewer = "auto_review"
+
+#approval_policy = "on-request" # Codex decides when to ask for permission
+approval_policy = "never" # Codex never asks, restricted actions simply fail.
+
+#sandbox_mode = "danger-full-access" #removes sandbox filesystem restrictions, including outside the repository.
+sandbox_mode = "workspace-write" #all normal workspace files are writable (.agents, .codex, and .git remain protected)
+[sandbox_workspace_write]
+writable_roots = ["/Users/yishai/Desktop/epigenetics_field_theory/.agents"]
+
+[features]
+memories = true
+
+[memories]
+generate_memories = true
+use_memories = true

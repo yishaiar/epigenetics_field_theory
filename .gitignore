@@ -25,6 +25,9 @@ __pycache__/
 
 local/
 /*.ipynb
+/.ipynb_checkpoints/
+/.jupyter/
+/.jupyter_ystore.db
 /*.py
 uv.lock
 
@@ -34,5 +37,8 @@ uv.lock
 
 # CURRENT_PLAN.md is ephemeral per-worktree scratch state written by
 # plan-new-feature and read by execute-new-feature — never commit it.
-.claude-*/memory/CURRENT_PLAN.md
+.agents/memory/CURRENT_PLAN.md
 .understand-anything/
+
+# Local Codex MCP configuration and its machine-specific runtime.
+.codex/jupyter-mcp-server-runtime/

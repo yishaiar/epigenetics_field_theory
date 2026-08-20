@@ -1,2 +1,2 @@
-def ModelPred():
+def ModelPred() -> str:
     return "ModelPred"
