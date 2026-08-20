@@ -1,0 +1,28 @@
+[tool.uv.workspace]
+members = ["app/model"] # add more members here as this template grows additional packages
+
+[tool.uv]
+dev-dependencies = [
+    "ipywidgets",
+    "ipython",
+    "jupyterlab",
+    "basedpyright>=1.39.9",
+    "ruff==0.15.20",
+    "pytest-asyncio==0.21.0",
+    "pylint>=4.0.6",
+]
+
+[tool.ruff]
+extend-exclude = ["*.ipynb"]
+line-length = 100 # match pylint's default max-line-length so both tools agree
+
+[tool.ruff.lint]
+#we try to imitate pylint with ruff (which is much faster)
+ignore = ["E712", "E713", "E721", "E731", "E741", "F401"] #ruff is more strict than pylint
+extend-select = ["E501"] # line-too-long, off by default in ruff's base rule set
+#select = ["E", "F", "W", "D", "PLR", "ARG", "BLE", "N"] # after ignore ruff passes thing pylint doesnt - to be equivalent to pylint
+
+[tool.pyright]
+typeCheckingMode = "standard"
+pythonVersion = "3.13"
+include = ["app"] # optional: restrict which folders to check by default

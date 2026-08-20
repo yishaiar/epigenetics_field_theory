@@ -1,0 +1,135 @@
+name: CI
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, synchronize]
+  workflow_dispatch:
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: shared/requirements/ci.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install pylint
+          if [ -f shared/requirements/ci.txt ]; then pip install -r shared/requirements/ci.txt; fi
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=/home/runner/work/ML/ML/" >> $GITHUB_ENV
+      - name: Lint
+        run: pylint --recursive=y shared
+      - name: Unit Test
+        run: pytest shared
+  contactability:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: apps/contactability/requirements/ci.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install pylint
+          if [ -f apps/contactability/requirements/ci.txt ]; then pip install -r apps/contactability/requirements/ci.txt; fi
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=/home/runner/work/ML/ML/" >> $GITHUB_ENV
+      - name: Lint
+        run: pylint --recursive=y apps/contactability
+      - name: Unit Test
+        run: pytest apps/contactability
+  translation:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.13" ]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: apps/translation/requirements/ci.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install pylint
+          if [ -f apps/translation/requirements/ci.txt ]; then pip install -r apps/translation/requirements/ci.txt; fi
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=/home/runner/work/ML/ML/" >> $GITHUB_ENV
+      - name: Lint
+        run: pylint --recursive=y apps/translation
+      - name: Unit Test
+        run: pytest apps/translation
+  libpostal_parser:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: apps/libpostal_parser/requirements/ci.txt
+      - name: 'Setup Libpostal'
+        id: setup-libpostal
+        uses: ./.github/workflows/_libpostal
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install pylint
+          if [ -f apps/libpostal_parser/requirements/ci.txt ]; then pip install -r apps/libpostal_parser/requirements/ci.txt; fi
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=/home/runner/work/ML/ML/" >> $GITHUB_ENV
+      - name: Lint
+        run: pylint --recursive=y apps/libpostal_parser
+      - name: Unit Test
+        run: pytest apps/libpostal_parser
+  waterfall:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: apps/waterfall/requirements/ci.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install pylint
+          if [ -f apps/waterfall/requirements/ci.txt ]; then pip install -r apps/waterfall/requirements/ci.txt; fi
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=/home/runner/work/ML/ML/" >> $GITHUB_ENV
+      - name: Lint
+        run: pylint --recursive=y apps/waterfall
+      - name: Unit Test
+        run: pytest apps/waterfall

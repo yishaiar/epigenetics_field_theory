@@ -1,0 +1,38 @@
+
+__pycache__/
+.git/
+.vscode/
+.venv/
+
+*.pyc
+*.cfg
+*.mat
+.DS_Store
+
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+
+
+
+# Environments
+.env
+.venv
+
+# VS Code settings
+.vscode/
+
+local/
+/*.ipynb
+/*.py
+uv.lock
+
+# .claude is a personal symlink to a tracked .claude-<name>/ folder — see
+# documentation/developement.md for setup. Never commit the symlink itself.
+/.claude
+
+# CURRENT_PLAN.md is ephemeral per-worktree scratch state written by
+# plan-new-feature and read by execute-new-feature — never commit it.
+.claude-*/memory/CURRENT_PLAN.md
+.understand-anything/
