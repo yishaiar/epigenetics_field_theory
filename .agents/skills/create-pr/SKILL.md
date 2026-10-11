@@ -1,7 +1,7 @@
 ---
 name: create-pr
 description: |
-  Write a pull request description for the current branch changes.
+  Create a pull request, verify its remote checks, and report its merge readiness.
   Use when the user asks to create, open, or draft a PR, or says
   "I'm ready to merge" or "write the PR description".
 ---
@@ -21,7 +21,9 @@ description: |
 6. **Write the description** using the structure below
 7. **Push and open the PR** — only with the user's explicit go-ahead;
    never push or run `gh pr create` on your own initiative
-8. **Merge, when asked** — only run `gh pr merge` with explicit go-ahead;
+8. **Check CI** — run `gh pr checks --watch --fail-fast`; if it passes, skip Step 9.
+9. **On failure** — plan a fix and request a second approval. After implementation, invoke this skill again.
+10. **Merge, when asked** — only run `gh pr merge` with explicit go-ahead;
    right after it succeeds, invoke `track-release-feature`
 
 ## PR Structure
@@ -54,3 +56,5 @@ description: |
 - Flag breaking changes explicitly — schema changes, API contract changes, env var additions
 - If a migration is needed, say so in Notes
 - Keep it factual — no filler phrases like "various improvements"
+- Do not call a PR merge-ready solely because its checks pass; report any
+  remaining review, mergeability, or branch-rule blockers.

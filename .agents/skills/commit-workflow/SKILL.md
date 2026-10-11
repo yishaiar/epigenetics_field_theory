@@ -12,11 +12,10 @@ Before committing, always format, test, and lint every changed file. Only commit
 
 ## Pre-Commit Checks
 
-### 1. Determine affected apps
+### 1. Determine affected workspace members
 
 Map each changed file to its app by taking the directory name directly
-under `apps/` (e.g. `apps/<app>/...` → `<app>`), or
-`shared` if the file is under `shared/`.
+under `scbatch/` (e.g. `scbatch/pp/...` → `pp`).
 
 ### 2. Run tests for changed files only
 
@@ -26,23 +25,24 @@ For each changed file that has a corresponding `test_*.py`, run it individually:
 uv run pytest <path/to/test_file.py>
 ```
 
-Never run the whole app's suite (`uv run pytest apps/<app>`) unless explicitly asked.
+Never run the whole suite unless explicitly asked; run the owning workspace
+member's local tests.
 
 ### 3. Run the formatter for changed files
 
 ```bash
-uv run ruff format apps/<app>   # or: uv run ruff format shared
+uv run ruff format scbatch/<member>
 ```
 
 Safe to auto-apply — purely cosmetic, same as the `format-on-save.sh` hook. Re-stage any files it touches.
 
-### 4. Run lint for affected apps
+### 4. Run lint for affected workspace members
 
 ```bash
-uv run ruff check apps/<app>   # or: uv run ruff check shared
+uv run ruff check scbatch/<member>
 ```
 
-Run lint for every app/directory that has at least one changed file.
+Run lint for every member or directory that has at least one changed file.
 
 ### 5. Fix before committing
 

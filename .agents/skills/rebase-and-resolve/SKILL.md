@@ -143,12 +143,11 @@ Keep this per-file — don't defer it to a single end-of-rebase summary, since t
 able to catch a wrong resolution before it's buried under several more commits' worth of
 `git rebase --continue`.
 
-After resolving each file, lint and format it (map the path to its app the same way
-`commit-workflow` does: the directory directly under `apps/`, or `shared`):
+After resolving each file, lint and format the owning `scbatch` member:
 
 ```bash
-uv run ruff format apps/<app>   # or: uv run ruff format shared
-uv run ruff check apps/<app>    # or: uv run ruff check shared
+uv run ruff format scbatch/<member>
+uv run ruff check scbatch/<member>
 ```
 
 If the resolved file has a corresponding `test_*.py`, run it:
@@ -197,11 +196,9 @@ After a clean rebase:
 git log --oneline origin/<base_branch>..HEAD
 git log --oneline HEAD..origin/<base_branch>  # should be empty
 
-# Run the full test suite, not just the files touched by conflict resolution —
-# integration/E2E tests can break from changes elsewhere in the merged history.
-# Only include an app if it has its own pyproject.toml (uv workspace member) --
-# check apps/<app_name> before adding it below.
-uv run pytest apps/<app_name> shared
+# Run the full suite, not just the files touched by conflict resolution.
+# Integration tests can break from changes elsewhere in the merged history.
+uv run pytest
 ```
 
 If tests fail after the rebase, investigate before reporting success. A clean rebase that breaks
@@ -224,7 +221,7 @@ Conflicts resolved: M files
   - <file_1> — independent changes, merged both
   - <file_2> — import conflict, kept both exports
 
-Tests: passed (uv run pytest apps/<app_name> shared)
+Tests: passed (uv run pytest)
 Ready to force-push: git push --force-with-lease
 ```
 

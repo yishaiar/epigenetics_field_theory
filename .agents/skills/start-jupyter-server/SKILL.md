@@ -8,34 +8,52 @@ description: |
 
 # Start Jupyter Server
 
-Run this before Jupyter MCP work. Do not wait for a Jupyter tool call to fail.
+Use this before Jupyter MCP work. Do not wait for a failed tool call or require
+a new chat when native `jupyter` tools are absent.
 
-1. Check whether the MCP connection is already live. If the current Codex
-   session exposes `jupyter` MCP tools, stop here.
-2. If the tools are not exposed, check whether a JupyterLab server is already
-   running and only a fresh Codex session is needed for the MCP connection:
-   ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8888/api/status
-   ```
-   Run this with host access. A restricted Codex shell can falsely return
-   `000` for a host-loopback server. `200` means the server is running.
-3. If nothing is running, start it detached so it survives Codex restarts. Run
-   this command from the repository that should be the Jupyter server root:
-   ```bash
-   nohup uv run jupyter lab --port 8888 --ip 127.0.0.1 --no-browser > /tmp/jupyterlab-codex.log 2>&1 < /dev/null &
-   disown
-   ```
-   Bind to `127.0.0.1`, never `0.0.0.0`, because the kernel executes arbitrary
-   code. Do not add a token to this command: local server authentication is
-   controlled by its Jupyter configuration.
-4. If the `jupyter` MCP is absent, verify the configuration with:
-   ```bash
-   codex mcp get jupyter
-   ```
-   If this command fails, stop and report that the Jupyter MCP is not
-   configured. Do not modify Codex MCP configuration without an explicit
-   request.
-5. Confirm the connection, not merely the HTTP server: start a fresh Codex
-   session and verify that `jupyter` MCP tools are exposed. Do not create a
-   notebook or execute code as part of this skill. Report success, or the
-   specific failure.
+## Check
+
+- If `jupyter` MCP tools are exposed, stop.
+- Otherwise check JupyterLab with host access:
+
+  ```bash
+  curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8888/api/status
+  ```
+
+- A restricted shell can return `000` for a live loopback server.
+- `200` means JupyterLab is running.
+
+## Start
+
+If JupyterLab is not running, run this from repository root:
+
+```bash
+nohup uv run jupyter lab --port 8888 --ip 127.0.0.1 --no-browser > /tmp/jupyterlab-codex.log 2>&1 < /dev/null &
+disown
+```
+
+- Start detached so it survives Codex restarts.
+- Bind to `127.0.0.1`, never `0.0.0.0`.
+- Do not add a token. Jupyter configuration controls local authentication.
+
+## Recover
+
+After startup, recheck `/api/status` with host access. If it is not `200`:
+
+- Inspect `/tmp/jupyterlab-codex.log`.
+- Retry using the repository's existing virtual-environment launcher, if any.
+- If detached children do not survive the command runner, use the platform's existing user-service configuration, if any.
+- Require a `200` response and a live service PID before continuing. Otherwise, report the log and service status, then stop.
+- Do not install dependencies or change configuration for a silent detached-launch failure.
+
+## Confirm
+
+- When MCP tools are absent, run `codex mcp get jupyter`.
+- If it fails, report that Jupyter MCP is unconfigured and stop.
+- Do not modify MCP configuration without an explicit request.
+- When tools remain absent after the server and configuration checks, run a direct stdio MCP smoke test with the configured command: `initialize`, `notifications/initialized`, then `connect_to_jupyter` at `http://127.0.0.1:8888`.
+- Success requires request `2` to contain `Successfully connected to Jupyter server:` and `"isError":false`.
+- Confirm the connection, not merely the HTTP server: optionally start a fresh Codex session and verify that native `jupyter` MCP tools are exposed. This is verification only, not a prerequisite for direct stdio MCP work in the current chat.
+- A successful probe proves the server and MCP work even if this chat lacks native tools. For a requested Jupyter operation, use the configured stdio MCP command directly: initialize, send `notifications/initialized`, call `connect_to_jupyter`, then the requested tool. It does not attach native tools to the chat.
+- Do not create notebooks or execute kernel code for connection-only requests.
+- Report success or the specific failure.

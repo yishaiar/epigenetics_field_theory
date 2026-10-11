@@ -12,12 +12,16 @@ jobs:
   quality:
     name: Quality
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Re-enable Python 3.13 once the Scanpy and Numba dependency chain supports it.
+        python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
-      - uses: astral-sh/setup-uv@v5
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: false
       - name: Install dependencies
@@ -40,7 +44,7 @@ jobs:
     name: Secrets
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2

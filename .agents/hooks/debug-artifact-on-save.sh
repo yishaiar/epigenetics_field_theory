@@ -10,7 +10,7 @@
 #
 # Why not also flag `print(`:
 #   This repo already uses `print(` pervasively as its normal output style
-#   (131+ existing call sites in apps/shared, non-test code) — it's this
+#   (existing scientific and notebook call sites) — it's this
 #   codebase's convention, not a debug leftover. Flagging it would fire on
 #   nearly every file touched and teach the Agent to ignore this hook. Only the
 #   patterns below are debugger-specific and had zero existing occurrences

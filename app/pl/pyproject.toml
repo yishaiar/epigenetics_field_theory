@@ -1,0 +1,14 @@
+[project]
+name = "scbatch-pl"
+version = "0.1.0"
+description = "Plotting workspace member for scbatch"
+requires-python = ">=3.11"
+dependencies = [
+    "anndata>=0.10.0",
+    "matplotlib>=3.7.0",
+    "numpy>=1.26.0",
+    "seaborn>=0.13.0",
+]
+
+[tool.uv]
+package = false

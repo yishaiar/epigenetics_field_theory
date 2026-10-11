@@ -1,44 +1,56 @@
-
 __pycache__/
-.git/
-.vscode/
-.venv/
-
-*.pyc
-*.cfg
-*.mat
+*.py[cod]
+*$py.class
 .DS_Store
 
+# Python packaging and build caches
+*.egg-info/
+build/
+dist/
+.eggs/
+.cache/
 
-# Byte-compiled / optimized / DLL files
-__pycache__/
+# Test, coverage, lint, and type-checker caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.pyright/
+.basedpyright/
+.coverage
+.coverage.*
+htmlcov/
 
-
-
-
-# Environments
-.env
-.venv
-
-# VS Code settings
-.vscode/
-
-local/
-/*.ipynb
-/.ipynb_checkpoints/
-/.jupyter/
-/.jupyter_ystore.db
-/*.py
+# Package-manager caches
+.uv/
 uv.lock
 
-# .claude is a personal symlink to a tracked .claude-<name>/ folder — see
-# documentation/developement.md for setup. Never commit the symlink itself.
-/.claude
 
-# CURRENT_PLAN.md is ephemeral per-worktree scratch state written by
-# plan-new-feature and read by execute-new-feature — never commit it.
+
+# Development environments and local configuration
+.env
+.venv/
+.vscode/
+local/
+
+# Notebook outputs and local Jupyter state
+/*.ipynb
+.ipynb_checkpoints/
+.jupyter/
+.jupyter_ystore.db
+
+# Local scripts and agent state
+/*.py
+/.claude
 .agents/memory/CURRENT_PLAN.md
 .understand-anything/
 
-# Local Codex MCP configuration and its machine-specific runtime.
+# Machine-specific Codex runtime
 .codex/jupyter-mcp-server-runtime/
+
+# Keep versioned notebook examples while excluding generated Jupyter state.
+examples/.ipynb_checkpoints/
+
+tmp/
+local_examples/

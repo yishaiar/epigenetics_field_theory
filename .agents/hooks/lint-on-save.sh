@@ -3,29 +3,33 @@
 # If lint fails, the Agent will see the errors and fix them.
 # ==============================================================================
 # Script: lint-on-save.sh
-# 
+#
 # What it does:
-#   Runs Ruff's linter on the saved Python file or Markdown document to
-#   surface code quality issues, logical bugs, and unused imports.
+#   Runs Ruff's linter on saved Python files, Markdown documents, and Jupyter
+#   notebook code cells to surface code quality issues and unused imports.
 #
 # How it handles Markdown (.md) files:
 #   Ruff does NOT lint your English text. Instead, it extracts blocks of code
-#   wrapped inside \`\`\`python ... \`\`\` fences and treats them as isolated 
-#   Python code snippets. It validates them to ensure documentation examples 
+#   wrapped inside \`\`\`python ... \`\`\` fences and treats them as isolated
+#   Python code snippets. It validates them to ensure documentation examples
 #   are free of syntax errors, broken logic, typos, or stale/unused imports.
 #
+# How it handles Jupyter notebooks (.ipynb):
+#   Ruff natively extracts and lints code cells while preserving notebook
+#   structure. This is static analysis only, not notebook execution.
+#
 # Crucial Execution Notes:
-#   1. NO '--fix' Flag: Per constraints, it only surfaces/raises errors so that 
+#   1. NO '--fix' Flag: Per constraints, it only surfaces/raises errors so that
 #      the Agent can observe and fix them in the context window.
-#   2. NO Project-Mapping Block: Unlike Nx, Ruff natively traverses directory 
-#      trees upwards from the target file to locate local pyproject.toml 
+#   2. NO Project-Mapping Block: Unlike Nx, Ruff natively traverses directory
+#      trees upwards from the target file to locate local pyproject.toml
 #      configurations automatically. No explicit 'if/elif' project maps are needed.
 
 
 # test:
 # save in file "test_ruff.py":
 # def foo(a, b):
-#     return a + b 
+#     return a + b
 
 # # 'x' is not defined, which will trigger a linting error!
 # result = foo(x, 3)
@@ -35,6 +39,8 @@
 # ==============================================================================
 
 INPUT=$(cat)
+PROJECT_ROOT=$(git rev-parse --show-toplevel) || exit 0
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_ROOT/.cache/uv}"
 FILE_PATHS=$(
   {
     printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null
@@ -47,7 +53,7 @@ FILE_PATHS=$(
 [ -z "$FILE_PATHS" ] && exit 0
 
 while IFS= read -r FILE_PATH; do
-[[ ! "$FILE_PATH" =~ \.(py|md)$ ]] && continue
+[[ ! "$FILE_PATH" =~ \.(py|md|ipynb)$ ]] && continue
 
 if [[ "$FILE_PATH" != /* ]]; then
   if [[ -f "$FILE_PATH" ]]; then
@@ -65,7 +71,7 @@ echo "Linting $FILE_PATH"
 
 # Run ruff check. We explicitly omit '--fix' so it only surfaces errors.
 # Invoked via uv so it resolves regardless of the calling shell's PATH.
-OUTPUT=$(uv run --project "$(git rev-parse --show-toplevel)" ruff check "$FILE_PATH" 2>&1)
+OUTPUT=$(uv run --project "$PROJECT_ROOT" ruff check "$FILE_PATH" 2>&1)
 STATUS=$?
 
 # Exit code 2 is what makes the Agent surface stderr back to the Agent automatically

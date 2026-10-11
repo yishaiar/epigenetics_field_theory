@@ -1,7 +1,8 @@
 #!/bin/bash
 # notify-on-stop.sh
 # Fires on the Stop event, when the Agent finishes responding.
-# Sends a macOS notification identifying which repo and worktree the session ran in.
+# Sends an optional macOS notification identifying which repo and worktree the
+# session ran in. Other operating systems skip this optional notification.
 
 # cli command to test:
 # echo "{\"cwd\": \"$(pwd)\"}" | bash .agents/hooks/notify-on-stop.sh
@@ -45,11 +46,14 @@ else
   MESSAGE=$(basename "$CWD")
 fi
 
-# `display notification` is built into macOS Standard Additions. If Codex's
-# sandbox cannot reach the GUI service, preserve the error rather than hiding it.
+# `display notification` is built into macOS Standard Additions. Notifications
+# are optional, so an unavailable GUI service must not make the Stop hook fail.
+if ! command -v osascript >/dev/null 2>&1; then
+  exit 0
+fi
+
 if ! osascript -e "display notification \"$MESSAGE\" with title \"Agent finished\""; then
-  echo "notify-on-stop.sh: macOS notification delivery failed." >&2
-  exit 2
+  echo "notify-on-stop.sh: macOS notification delivery unavailable." >&2
 fi
 
 exit 0

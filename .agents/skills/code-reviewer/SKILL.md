@@ -25,15 +25,14 @@ When reviewing code, always cover these areas in order:
 ## 3. Performance
 
 - No unnecessary loops inside loops
-- No N+1 database query patterns
+- No unnecessary repeated matrix conversion, copying, or materialization
 - Large data sets are paginated or streamed
 
-## 4. App-Specific Consistency
+## 4. Module-Specific Consistency
 
-- If the change touches an app with its own `AGENTS.md` (e.g.
-  `apps/<name>/AGENTS.md`) documenting a layered/multi-stage architecture,
-  verify every stage it calls out was updated in sync — touching one
-  stage and missing another is a common, easy-to-miss bug class.
+- If the change touches a `scbatch` member, verify its AnnData mutation
+  contract, public namespace export, and component-local tests are updated in
+  sync.
 - Check that anything the AGENTS.md flags as "must be registered" (added
   to a list/config, not just implemented) actually is — an
   implemented-but-unregistered step will silently never run.

@@ -11,6 +11,12 @@ description: |
 ## Golden Rule
 Refactoring must not change observable behavior. If tests break, stop.
 
+## Preserve the Current Version
+Before editing, inspect the current file and treat its contents, including
+manual user edits, as authoritative. Never replace newer changes with an older
+version recalled from memory or conversation. Change user-edited code when the
+request requires it; if that intent is unclear, ask before replacing it.
+
 ## Process
 1. **Understand before touching** — read the full function/module first
 2. **Identify the smell** — name the specific problem:

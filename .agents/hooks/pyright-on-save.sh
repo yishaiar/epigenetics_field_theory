@@ -14,7 +14,7 @@
 #   2. Single-file scope: only the saved file is checked, not the whole
 #      project, to keep this fast enough to run on every save.
 #   3. `include`/`exclude` in `[tool.pyright]` (pyproject.toml) don't apply
-#      here — those only filter whole-project directory scans. 
+#      here — those only filter whole-project directory scans.
 
 
 # test:
@@ -28,6 +28,8 @@
 # ==============================================================================
 
 INPUT=$(cat)
+PROJECT_ROOT=$(git rev-parse --show-toplevel) || exit 0
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_ROOT/.cache/uv}"
 FILE_PATHS=$(
   {
     printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null
@@ -57,7 +59,7 @@ fi
 echo "Type-checking $FILE_PATH"
 
 # Run basedpyright on just this file (via uv so it resolves regardless of shell PATH)
-OUTPUT=$(uv run --project "$(git rev-parse --show-toplevel)" basedpyright "$FILE_PATH" 2>&1)
+OUTPUT=$(uv run --project "$PROJECT_ROOT" basedpyright "$FILE_PATH" 2>&1)
 STATUS=$?
 
 # Exit code 2 is what makes the Agent surface stderr back to the Agent automatically

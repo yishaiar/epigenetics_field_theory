@@ -1,30 +1,92 @@
-[tool.uv.workspace]
-members = ["app/model"] # add more members here as this template grows additional packages
+[build-system]
+requires = ["setuptools>=74.1.0"]
+build-backend = "setuptools.build_meta"
 
-[tool.uv]
-dev-dependencies = [
+[project]
+name = "scbatch"
+version = "0.1.0"  # Standard starting version for a brand-new package
+description = "End-to-end single-cell data preprocessing and batch correction package"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Yishai Arieli", email = "yishai.arieli@mail.huji.ac.il" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26.0",
+    "pandas>=2.0.0",
+    "pydantic>=2.0.0",
+    "scipy>=1.11.0",
+    "anndata>=0.10.0,<0.11",
+    "scanpy>=1.9.8,<1.10",
+    "numba>=0.59.1,<0.60",
+    #"igraph>=1.0.0",
+    "leidenalg==0.12.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.13.0",
+    "scikit-learn>=1.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff==0.15.20",
+    "basedpyright>=1.39.9",
+    "pytest-asyncio==0.21.0",
+    "pylint>=4.0.6",
     "ipywidgets",
     "ipython",
     "jupyterlab",
-    "basedpyright>=1.39.9",
-    "ruff==0.15.20",
-    "pytest-asyncio==0.21.0",
-    "pylint>=4.0.6",
     "python-dotenv>=1.2.3",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff==0.15.20",
+    "basedpyright>=1.39.9",
+    "pytest-asyncio==0.21.0",
+    "pylint>=4.0.6",
+    "ipywidgets",
+    "ipython",
+    "jupyterlab",
+    "python-dotenv>=1.2.3",
+]
+
+[tool.uv.workspace]
+members = [
+    "scbatch/pp",
+    "scbatch/pl",
+    "scbatch/datasets",
+    "scbatch/tl",
+]
+
 [tool.ruff]
-extend-exclude = ["*.ipynb"]
-line-length = 100 # match pylint's default max-line-length so both tools agree
+# Ruff 0.6+ natively formats and lints Jupyter notebooks. Keep notebooks enabled
+# so the existing save hooks check notebook code cells with the project policy.
+# extend-exclude = ["*.ipynb"]
+line-length = 100
 
 [tool.ruff.lint]
-#we try to imitate pylint with ruff (which is much faster)
-ignore = ["E712", "E713", "E721", "E731", "E741", "F401"] #ruff is more strict than pylint
-extend-select = ["E501", "ANN201"] # line-too-long and public-function return annotations
-#select = ["E", "F", "W", "D", "PLR", "ARG", "BLE", "N"] # after ignore ruff passes thing pylint doesnt - to be equivalent to pylint
+ignore = ["E712", "E713", "E721", "E731", "E741", "F401"]
+extend-select = ["E501", "ANN201"]
 
 [tool.pyright]
 typeCheckingMode = "standard"
-pythonVersion = "3.13"
-include = ["."]
+pythonVersion = "3.11"
+include = ["scbatch"]
 exclude = ["**/node_modules", "**/__pycache__", "**/.git", "**/.venv"]
+
+[tool.setuptools.packages.find]
+include = ["scbatch*"]
+
+[tool.setuptools.package-data]
+# Tells setuptools to include non-Python files (e.g., text files inside any subfolder of 'datasets') 
+# when building and distributing the package wheel.
+"scbatch" = ["datasets/**/*.json", "datasets/**/*.txt"]
+
+[project.urls]
+Homepage = "https://github.com/yishaiar/scbatch"
+Repository = "https://github.com/yishaiar/scbatch"

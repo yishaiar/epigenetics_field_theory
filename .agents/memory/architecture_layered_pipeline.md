@@ -1,120 +1,89 @@
-# Stages (layers) Pipeline Architecture (use when scaffolding a new repo)
+# Staged pipeline architecture, for application repositories
 
-A reusable way to structure any app that takes raw input, processes it
-through several stages, and produces a result (e.g. clean data → extract
-signals → score/classify). Use this file as the blueprint when starting a
-brand-new repo for that kind of app — even though the source repo this was
-learned from calls its stages "data_loading" / "features_preprocess" / "inference",
-your new app should use whatever stage names fit its own domain.
+This is the preserved generic architecture blueprint from the source repository. Use it only when scaffolding a repository that takes raw input through named stages to produce a result. `scbatch` itself is not an application repository and must use the scientific-package architecture below.
 
-## The shape, in one picture
+## Shape
 
-```
+```text
 <app>/
-├── pipeline.py       # the "orchestrator" — see Level 1 below
-├── config.py         # one place holding every field name, threshold,
-│                     # and model/registry name — every stage reads from
-│                     # this, nothing is hardcoded stage-by-stage
-├── <stage_a>.py       # Level 2 — one file per stage, see below
-├── <stage_b>.py
-└── <stage_b>/          # a stage CAN be split into its own folder — only
-    ├── concern_1.py    # do this once that stage has enough internal
-    └── concern_2.py    # complexity to justify separate files (Level 3)
+├── pipeline.py       # Level 1 orchestrator
+├── config.py         # fields, thresholds, registry names, shared settings
+├── <stage_a>.py      # Level 2 stage
+├── <stage_b>.py      # Level 2 stage
+└── <stage_b>/        # optional Level 3 decomposition
+    ├── concern_1.py
+    └── concern_2.py
 ```
 
-There are three levels. Every new repo built this way needs Level 1 and
-Level 2. Level 3 is optional — only add it where it earns its keep.
+Every application needs Level 1 and Level 2. Level 3 is optional and is added only where it earns its keep.
 
-## Level 1 — the orchestrator (`pipeline.py`)
+## Level 1, the orchestrator (`pipeline.py`)
 
-This is the single entry point a caller uses to run the whole app. It is
-made of two kinds of class:
+This is the single caller-facing entry point for the whole application. It has two class roles:
 
-- **One base class** holding setup that every use case of this app shares —
-  things like resolving a database connection, loading config, etc. It does
-  not run any stages itself (start empty).
-- **One subclass per distinct top-level use case** the app supports. If the
-  app only ever does one thing, one subclass is enough. If it supports
-  multiple distinct request shapes (e.g. "score a single record" vs "score
-  a whole batch"), each gets its own subclass. Each subclass has one method
-  that is the actual entry point — it constructs the Level 2 stage objects
-  in order and calls them one after another, passing each stage's output as
-  the next stage's input.
+- One base class holds setup shared by every use case, such as configuration or a database connection. It does not run stages itself.
+- One subclass per distinct top-level use case. Each subclass has one entry-point method that constructs Level 2 stages in order and passes each stage output to the next.
 
-Nothing about *how* a stage does its job lives here — the orchestrator only
-knows the sequence and passes data along.
+The orchestrator owns sequencing only. Stage implementation detail does not belong here.
 
-## Level 2 — stage classes (one file/class per stage)
+## Level 2, stage classes
 
-Split the app's work into stages, where each stage is a self-contained,
-named step (e.g. "cleaning", "feature extraction", "scoring" — name them for
-what your domain actually needs, don't force a fixed count or fixed names).
-Each stage:
+Split work into self-contained named steps that fit the domain. Each stage:
 
-- is its own class, in its own file
-- takes the shared `Config` object (see below) in its constructor
-- exposes one method the orchestrator calls to run that stage
-- knows nothing about the stages before or after it — it only receives
-  input data and returns output data
+- is a class in its own file;
+- takes the shared `Config` object in its constructor;
+- exposes one method invoked by the orchestrator; and
+- knows nothing about adjacent stages, receiving input and returning output.
 
-A stage is usually not "one function that does everything" — it has to
-handle many small variants of the same kind of work (e.g. a cleaning stage
-must clean many different field types; a scoring stage must run several
-different models on different subsets of the data). How to handle that
-internal variation is Level 3.
+A stage can handle variants internally. Choose the appropriate Level 3 pattern per variant.
 
-## Level 3 (optional) — handling variation inside a stage
+## Level 3, optional internal variation
 
-Do not default to subclassing the stage itself per variant. Pick whichever
-of these three fits, per variant if needed — a single stage can legitimately
-mix approaches:
+Do not subclass a stage for every variant. Use one or mix these patterns:
 
-1. **Dispatch dict of plain methods** — the default, simplest choice. In
-   the stage's constructor, build a dict mapping each variant's name to one
-   of the stage's own methods (e.g. `self.handlers = {"field_x":
-   self.clean_field_x, "field_y": self.clean_field_y}`). Use this whenever
-   each variant's logic is short — a few lines each.
-
-2. **Dispatch dict delegating to composed helper classes** — once a
-   variant's logic grows large enough to want its own file (many related
-   methods, its own internal state/helpers), give it its own class in its
-   own file, instantiate it in the stage's constructor, and point the same
-   dispatch dict at *that instance's* method instead of the stage's own.
-   The dict ends up mixing plain methods and delegated methods side by
-   side — that's expected, not a sign of inconsistency. Do NOT make the
-   stage class itself subclassed per variant; composition, not inheritance,
-   is what varies here.
-
-3. **List of declarative entries + one generic runner** — use this instead
-   of a dispatch dict when the variants are not really different logic, just
-   the same operation with different parameters (e.g. "run this model, on
-   this subset of rows, write the score to this column" repeated for
-   several models). Build a plain list of small config records (one per
-   variant, e.g. a small dataclass with fields like `which_model`,
-   `which_rows`, `output_column`), and write exactly one method that loops
-   over the list and applies each entry the same way. Adding a new variant
-   means appending one entry — no new method, no new class.
+1. **Dispatch dictionary of plain methods**. Default to a mapping from variant name to a short method on the stage.
+2. **Dispatch dictionary delegating to composed helpers**. When a variant grows substantial internal state or several helpers, put it in its own class and map that variant to the helper method. Use composition, not stage inheritance.
+3. **Declarative entries plus one generic runner**. When variants use the same logic with different parameters, define small configuration records and loop over them in one runner. Adding a variant then means adding an entry, not a method or class.
 
 ## `config.py`
 
-One `Config` class (or module) that every stage reads from — field-name
-mappings, thresholds, model/registry names. When adding anything new to the
-app (a new field, a new model, a new threshold), it starts here, then gets
-wired into whichever stage(s) need it.
+One `Config` class or module holds field mappings, thresholds, and registry names that every stage reads. A new field, model, or threshold starts there, then is wired into the stages that need it.
 
-## Checklist for scaffolding a new repo with this pattern
+## Scaffolding checklist
 
-1. Write `config.py` first — even a near-empty `Config` class is fine to
-   start; stages will read from it.
-2. Write `pipeline.py` with the base orchestrator class and one subclass
-   per top-level use case — no stage logic yet, just the call sequence.
-3. Write one stage class per step, each in its own file, each taking
-   `Config` in its constructor.
-4. Inside each stage, start with a plain dispatch dict (Level 3, option 1).
-   Only split a variant into its own composed class, or switch a stage to
-   the declarative-list style, once that stage's real complexity calls for
-   it — don't pre-build all three patterns speculatively.
-5. Adding a new signal/field/model later should only ever require: a
-   `config.py` entry, plus (if needed) a new method or dispatch entry
-   inside the relevant stage. It should never require changing
-   `pipeline.py`.
+1. Write `config.py` first, even if it initially holds an almost-empty `Config` class.
+2. Write `pipeline.py` with the base orchestrator and one subclass per top-level use case. Keep it free of stage logic.
+3. Add one stage class per step, each taking `Config` in its constructor.
+4. Start with a dispatch dictionary of plain methods. Split into composed helpers or switch to declarative entries only when real complexity requires it.
+5. A new signal, field, or model should require a `config.py` entry and, if needed, a method or dispatch entry in its owning stage. It should not require a `pipeline.py` change.
+
+# Scientific package architecture, for `scbatch`
+
+`scbatch` is one Scanpy-style package, not a collection of services. Its UV workspace members are ownership boundaries for scientific code.
+
+```text
+AnnData input
+    |
+    +-- scbatch.datasets  reproducible inputs and fixtures
+    +-- scbatch.pp        validation, transformations, correction
+    +-- scbatch.tl        graph, embedding, clustering, downstream analysis
+    +-- scbatch.pl        diagnostics and publication-ready plots
+```
+
+## Boundaries
+
+- `pp` may write documented corrected or intermediate layers and method provenance to `adata.uns`.
+- `tl` consumes documented representations and writes graphs or embeddings to standard AnnData slots.
+- `pl` reads results without mutating the input unless its public API states otherwise.
+- `datasets` supplies deterministic, documented test and example inputs.
+
+## Public interfaces
+
+Use `AnnData` for data-bearing APIs and Pydantic v2 for public request, configuration, and result schemas. Validate metadata keys, shapes, and axis alignment before mutation. Preserve sparse representations when supported.
+
+## Development sequence
+
+1. Define the public schema and AnnData mutation contract.
+2. Implement the owning workspace member without cross-module leakage.
+3. Add tests beside that member for normal, invalid, empty, sparse, and dense inputs as applicable.
+4. Export only stable public functions through the corresponding namespace.
