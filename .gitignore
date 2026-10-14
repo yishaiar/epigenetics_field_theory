@@ -54,3 +54,9 @@ examples/.ipynb_checkpoints/
 
 tmp/
 local_examples/
+
+
+_processed_cytof_pipeline_yishai/
+_processed_cytof_pipeline/
+som_ot_warp_repo_anchor/
+cytof_helper/
