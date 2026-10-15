@@ -3,14 +3,14 @@ requires = ["setuptools>=74.1.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "scbatch"
+name = "epigenetics-field-theory"
 version = "0.1.0"  # Standard starting version for a brand-new package
-description = "End-to-end single-cell data preprocessing and batch correction package"
-readme = "README.md"
+description = "Reproducible CyTOF preprocessing, harmonization, annotation, and analysis workflows"
 license = "MIT"
 authors = [
     { name = "Yishai Arieli", email = "yishai.arieli@mail.huji.ac.il" }
 ]
+# Preferred development interpreter: Python 3.11.9.
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26.0",
@@ -22,13 +22,26 @@ dependencies = [
     "numba>=0.59.1,<0.60",
     #"igraph>=1.0.0",
     "leidenalg==0.12.0",
+    "python-igraph>=0.11.0",
+    "umap-learn>=0.5.6",
+    "xgboost>=2.0.0",
     "matplotlib>=3.7.0",
     "seaborn>=0.13.0",
     "scikit-learn>=1.4.0",
+    "pillow",
+    "plotly",
+    "statsmodels",
+    "torch>=2.2.2,<2.3; sys_platform == 'darwin'",
+    "torch; sys_platform != 'darwin'",
+    "tqdm",
+    "minisom",
+    "POT",
+    "python-dotenv>=1.2.3",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "pip",
     "pytest>=8.0",
     "pytest-cov",
     "ruff==0.15.20",
@@ -38,30 +51,11 @@ dev = [
     "ipywidgets",
     "ipython",
     "jupyterlab",
-    "python-dotenv>=1.2.3",
+    "ipykernel",
 ]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.0",
-    "pytest-cov",
-    "ruff==0.15.20",
-    "basedpyright>=1.39.9",
-    "pytest-asyncio==0.21.0",
-    "pylint>=4.0.6",
-    "ipywidgets",
-    "ipython",
-    "jupyterlab",
-    "python-dotenv>=1.2.3",
-]
-
-[tool.uv.workspace]
-members = [
-    "scbatch/pp",
-    "scbatch/pl",
-    "scbatch/datasets",
-    "scbatch/tl",
-]
+dev = ["pip"]
 
 [tool.ruff]
 # Ruff 0.6+ natively formats and lints Jupyter notebooks. Keep notebooks enabled
@@ -76,17 +70,13 @@ extend-select = ["E501", "ANN201"]
 [tool.pyright]
 typeCheckingMode = "standard"
 pythonVersion = "3.11"
-include = ["scbatch"]
+include = ["app"]
 exclude = ["**/node_modules", "**/__pycache__", "**/.git", "**/.venv"]
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-m 'not slow'"
+markers = ["slow: full-dataset reference comparisons, run with pytest -m slow"]
+
 [tool.setuptools.packages.find]
-include = ["scbatch*"]
-
-[tool.setuptools.package-data]
-# Tells setuptools to include non-Python files (e.g., text files inside any subfolder of 'datasets') 
-# when building and distributing the package wheel.
-"scbatch" = ["datasets/**/*.json", "datasets/**/*.txt"]
-
-[project.urls]
-Homepage = "https://github.com/yishaiar/scbatch"
-Repository = "https://github.com/yishaiar/scbatch"
+include = ["app*"]

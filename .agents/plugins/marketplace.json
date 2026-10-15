@@ -8,7 +8,7 @@
       "name": "caveman",
       "source": {
         "source": "local",
-        "path": "./.codex-plugins/caveman"
+        "path": "./.codex/plugins/caveman"
       },
       "policy": {
         "installation": "AVAILABLE",

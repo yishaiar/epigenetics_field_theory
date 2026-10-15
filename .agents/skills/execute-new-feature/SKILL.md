@@ -8,7 +8,7 @@ description: |
 
 # New Feature Executor
 
-Load the approved plan from `.agents/memory/CURRENT_PLAN.md` before doing
+Load the approved plan from `documentation/CURRENT_PLAN.md` before doing
 anything else. If it doesn't exist, stop and ask the user to run
 `/plan-new-feature` first — don't improvise a plan from conversation
 context alone, unless the user has explicitly said to proceed without

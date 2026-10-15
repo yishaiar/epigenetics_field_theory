@@ -30,7 +30,7 @@ plan is explicitly approved.
 
 ## After Approval
 
-Save the approved plan to `.agents/memory/CURRENT_PLAN.md` (overwrite if
+Save the approved plan to `documentation/CURRENT_PLAN.md` (overwrite if
 it already exists) so `/execute-new-feature` can load it.
 
 Tell the user:

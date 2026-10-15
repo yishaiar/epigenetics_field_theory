@@ -26,7 +26,8 @@ request requires it; if that intent is unclear, ask before replacing it.
    - Deeply nested conditionals
    - Magic numbers or strings
 3. **Apply one change at a time** — don't combine multiple refactors
-4. **Run tests after each change** — not just at the end
+4. **Run tests after each change** — follow `/babysit-tests` for concise
+   reporting and returning failure details when debugging is needed
 5. **Rename with intent** — new names should make comments unnecessary
 
 ## Common Patterns
