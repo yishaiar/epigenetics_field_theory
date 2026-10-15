@@ -5,51 +5,54 @@ This file provides guidance to coding agents when working with code in this repo
 **At the start of every session, always read and follow:**
 
 1. `.agents/AGENTS.md` — Shared agent instructions, workflows, skills, and policies.
-2. `.agents/memory/MEMORY.md` — Persistent project knowledge, context, and known issues.
+2. `documentation/MEMORY.md` — Persistent project knowledge, context, and known issues.
 
 Both files are mandatory and must be read before performing any task.
 
 
 ## Overview
 
-`scbatch` is a scientific Python monorepo for the batch-effect comparison paper and its package implementation. It has one published distribution, `scbatch`; `scbatch/pp`, `scbatch/pl`, `scbatch/datasets`, and `scbatch/tl` are internal UV workspace ownership boundaries, not separately installable applications.
+This repository contains the `epigenetics-field-theory` Python distribution and a staged CyTOF analysis workflow. The installable Python package is `app`. Reusable code is organized by workflow stage, and the numbered notebooks in `notebooks/` orchestrate those stages.
 
 ## Architecture
 
-### Scientific package architecture
+### CyTOF workflow
 
-This repository is a Scanpy-style scientific package, not an application monorepo. Its UV workspace members are ownership boundaries for scientific code.
+The current workflow passes tabular data and CSV artifacts between stages:
 
 ```text
-AnnData input
+input CSV files
     |
-    +-- scbatch.datasets  reproducible inputs and fixtures
-    +-- scbatch.pp        validation, transformations, correction
-    +-- scbatch.tl        graph, embedding, clustering, downstream analysis
-    +-- scbatch.pl        diagnostics and publication-ready plots
+    +-- app.preprocessing  loading, gating, filtering, and arcsinh transformation
+    +-- app.harmonization  normalization, balancing, batch correction, and scaling
+    +-- app.annotation     UMAP, clustering, labels, and staining plots
+    +-- app.analysis       biological comparisons and distribution analyses
 ```
 
-`pp` may write documented corrected or intermediate layers and method provenance to `adata.uns`. `tl` consumes documented representations and writes graphs or embeddings to standard AnnData slots. `pl` reads results without mutation unless its public API explicitly states otherwise. `datasets` supplies deterministic, documented test and example inputs.
+The notebooks `01_preprocessing.ipynb`, `02_harmonization.ipynb`, `03_annotation.ipynb`, and `04_analysis.ipynb` correspond to those stages. Keep file boundaries, output paths, and table schemas explicit when passing data between stages. Workflow CSVs should be written without an implicit index unless a specific artifact contract requires one.
 
-Use `AnnData` for data-bearing APIs and Pydantic v2 for public request, configuration, and result schemas. Validate metadata keys, shapes, and axis alignment before mutation.
+Current workflow functions primarily accept and return pandas DataFrames or filesystem paths. Raw input CSVs live in the local, Git-ignored `raw_dats/` directory; generated workflow outputs remain under `results/experiment_<ddmmyy>/`. Validate required columns before processing, preserve row and marker alignment, and keep public function signatures typed. Use Pydantic v2 when introducing public request, configuration, or result schemas.
 
-### Package structure
+### Source structure
 
 ```text
-scbatch/
-├── pp/        # preprocessing and batch correction
-├── pl/        # diagnostics and result plotting
-├── datasets/  # reproducible and synthetic AnnData datasets
-└── tl/        # graph, embedding, clustering, and downstream tools
+app/
+├── preprocessing/  # raw loading, filtering, gating, and transformation
+├── harmonization/  # normalization, balancing, correction, and scaling
+├── annotation/     # embeddings, clustering, labeling, and plots
+└── analysis/       # biological comparisons and KDE analyses
+notebooks/          # one notebook per workflow stage
+raw_dats/           # local, Git-ignored raw CSV inputs
+results/            # generated, experiment-scoped outputs
 ```
 
-When creating a new scientific capability, first define the public schema and AnnData mutation contract. Then implement it in the owning member, add local tests for normal, invalid, empty, sparse, and dense inputs as applicable, and export only stable public functions through the corresponding namespace.
+Keep a new function in the stage that owns its behavior. Export stable functions through that stage's `app/<stage>/__init__.py` and add tests beside the implementation. Preserve `main1.ipynb` as the source reference; do not modify or delete it.
 
-The generic staged-pipeline blueprint is preserved in `.agents/memory/architecture_layered_pipeline.md` for future repositories that actually have applications. Do not force that application architecture onto `scbatch`.
+The project distribution metadata and runtime/development dependencies live in the root `pyproject.toml`. Development dependencies are exposed through its `dev` extra.
 
 ## Tests
 
-Tests live beside the owning component at `scbatch/<module>/tests/test_<component>.py`. Keep setup local to the test class, use `unittest.TestCase` for synchronous code and `unittest.IsolatedAsyncioTestCase` for asynchronous code, and use `unittest.mock` for external services. Test normal behavior, invalid metadata, empty inputs, sparse and dense inputs where supported, and Pydantic validation when a public schema is introduced.
+Tests live beside the owning component at `app/<stage>/tests/test_<component>.py`. Keep setup local to the test class, use `unittest.TestCase` for synchronous code and `unittest.IsolatedAsyncioTestCase` for asynchronous code, and use `unittest.mock` for external services. Test normal behavior, invalid columns and values, empty inputs, and CSV/file boundary behavior as applicable.
 
-Jupyter is optional support for notebooks and exploratory verification. The `start-jupyter-server` skill checks connectivity only and must not substitute for package tests.
+Jupyter notebooks are part of the staged research workflow. Notebook validation is separate from package tests; a server connection or static source inspection does not prove that a notebook executed successfully.
 
