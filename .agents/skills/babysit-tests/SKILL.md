@@ -47,6 +47,12 @@ uv run pytest <path/to/test_file.py> -v
 Never run the whole suite unless explicitly asked; run the owning member's
 test directory instead.
 
+- Run each selected pytest command in a `gpt-6-luna` subagent.
+- Report every run in the main conversation:
+  - **Passed:** command and test counts; mention warnings if present.
+  - **Failed:** command and brief failure summary.
+- Keep full output in the subagent unless debugging requires relevant details.
+
 ## Step 4 — Diagnose and fix failures
 
 Read each failure and categorize it:

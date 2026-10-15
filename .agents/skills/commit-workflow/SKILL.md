@@ -19,11 +19,9 @@ under `scbatch/` (e.g. `scbatch/pp/...` → `pp`).
 
 ### 2. Run tests for changed files only
 
-For each changed file that has a corresponding `test_*.py`, run it individually:
-
-```bash
-uv run pytest <path/to/test_file.py>
-```
+For each changed file that has a corresponding `test_*.py`, run it individually
+following `/babysit-tests` for concise reporting and returning failure details
+when debugging is needed.
 
 Never run the whole suite unless explicitly asked; run the owning workspace
 member's local tests.

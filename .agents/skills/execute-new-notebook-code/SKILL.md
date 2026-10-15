@@ -9,7 +9,7 @@ description: |
 
 # New Notebook Code Executor
 
-Load the approved notebook plan from `.agents/memory/CURRENT_PLAN.md` before
+Load the approved notebook plan from `documentation/CURRENT_PLAN.md` before
 doing anything else. If it is absent or does not describe a notebook, ask the
 user to run `/plan-new-feature` first. Do not infer a plan from conversation
 context unless the user explicitly authorizes proceeding without one. Do not
@@ -28,13 +28,17 @@ notebook work or an explicitly approved notebook plan.
 5. Add type hints to every function implemented in notebook code cells.
 6. Do not present a scaffold as a completed implementation.
 
-## Add runtime provenance
+## Organize opening cells and verify provenance
 
-1. Make the first executable cell a runtime-provenance cell.
-2. Print the kernel executable and current working directory.
-3. Print the imported package path when local package code is imported.
-4. In a worktree, fail when that path is outside the intended worktree.
-5. Treat this as an executable contract, not a source-only check.
+Keep the first three code cells separate:
+1. Environment/setup: locate the checkout, configure `sys.path`, and verify
+   that the imported project package resolves inside that checkout or worktree.
+2. Imports: third-party packages and project APIs.
+3. Run variables: paths, experiments, markers, and thresholds.
+
+4. Keep validation, data loading, and computation in later cells.
+5. Stay silent when the provenance check passes; on failure, raise a clear
+   error. Treat provenance as an executable contract, not a source-only check.
 
 ## Keep scope and hand off
 

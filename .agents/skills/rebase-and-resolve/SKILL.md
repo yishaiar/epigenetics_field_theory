@@ -150,7 +150,9 @@ uv run ruff format scbatch/<member>
 uv run ruff check scbatch/<member>
 ```
 
-If the resolved file has a corresponding `test_*.py`, run it:
+If the resolved file has a corresponding `test_*.py`, run it following
+`/babysit-tests` for concise reporting and returning failure details when
+debugging is needed:
 
 ```bash
 uv run pytest <path/to/test_file.py>
@@ -198,6 +200,8 @@ git log --oneline HEAD..origin/<base_branch>  # should be empty
 
 # Run the full suite, not just the files touched by conflict resolution.
 # Integration tests can break from changes elsewhere in the merged history.
+# Follow /babysit-tests for concise reporting and returning failure details
+# when debugging is needed.
 uv run pytest
 ```
 

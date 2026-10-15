@@ -8,7 +8,7 @@ approval_policy = "on-request" # Codex decides when to ask for permission
 sandbox_mode = "workspace-write" #all normal workspace files are writable (.agents, .codex, and .git remain protected)
 
 personality = "pragmatic"
-model = "gpt-5.6-terra"
+model = "gpt-6-luna"
 model_reasoning_effort = "medium"
 
 [tui]
@@ -28,3 +28,6 @@ memories = true
 [memories]
 generate_memories = true
 use_memories = true
+
+[plugins."caveman@local-plugins"]
+enabled = true

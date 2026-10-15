@@ -2,7 +2,7 @@
 # plan-mode-enforce-skill.sh
 # Fires on every UserPromptSubmit event. Native Plan Mode can activate from
 # session state alone, bypassing this project's plan-new-feature skill and
-# its post-approval CURRENT_PLAN.md save. Nudge the Agent to load it when
+# its post-approval documentation/CURRENT_PLAN.md save. Nudge the Agent to load it when
 # permission_mode is "plan".
 
 # cli command to test:

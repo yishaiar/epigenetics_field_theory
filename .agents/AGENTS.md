@@ -4,6 +4,20 @@ This file provides guidance to coding agents when working with code: instruction
 
 ## Commands
 
+## Communication
+
+- Default to Caveman `lite` in replies. Keep technical meaning clear.
+- Follow the user's request to switch styles or use another Caveman intensity.
+
+### Command invocation and approvals
+
+- Run exactly one command per tool call. Do not chain or combine commands with `&&`, `||`, `;`, pipes, or shell wrappers. This applies to every command.
+- Run approved checks directly, such as `uv run pytest ...`, so command rules can match.
+- Avoid unnecessary variable assignments; they can prevent a rule for the underlying command from matching.
+- If a variable assignment is required and the command prompts, request approval for that specific command. Do not allow all shell commands to avoid the prompt.
+- Notebook execution remains deliberate and follows the notebook validation workflow below. Then invoke the notebook command directly.
+
+
 ### Installation
 
 ```bash
@@ -92,15 +106,22 @@ Skills below cover structured processes. The per-file execution-validation loop 
 | User finishes or pauses complex feature work and wants to save context | `/save-feature-context` |
 | User asks to start Jupyter, check its connection, or verify that a live Jupyter kernel connection is available | `/start-jupyter-server` |
 
+### Architecture reference
+
+For the staged pipeline architecture blueprint, see
+`.agents/architecture_layered_pipeline.md`. Use it when scaffolding an
+application-style workflow; it is a reference and does not override this
+repository's current architecture instructions.
+
 ### New-feature flow
 
 For implementing a new feature end-to-end, skills chain in this order. These are three separate pipelines. Clear the conversation between each step for fresh context; every step reads persisted state rather than conversation history.
 
-1. `/plan-new-feature` plans in Plan Mode. On approval, it saves the plan to `.agents/memory/CURRENT_PLAN.md`, a gitignored local scratch file, and suggests switching permission mode for the execution phase.
+1. `/plan-new-feature` plans in Plan Mode. On approval, it saves the plan to `documentation/CURRENT_PLAN.md`, a gitignored local scratch file, and suggests switching permission mode for the execution phase.
 
    Clear the conversation here.
 
-2. `/execute-new-feature` loads the approved plan from `.agents/memory/CURRENT_PLAN.md`, then implements it phase by phase: types, logic, error handling, tests, and documentation. It invokes `/write-tests`, then `/babysit-tests` to verify the result.
+2. `/execute-new-feature` loads the approved plan from `documentation/CURRENT_PLAN.md`, then implements it phase by phase: types, logic, error handling, tests, and documentation. It invokes `/write-tests`, then `/babysit-tests` to verify the result.
 
    Clear the conversation here.
 
@@ -116,7 +137,7 @@ relying solely on conversation history.
 
 1. `/plan-new-feature` defines the new notebook or notebook-code goal,
    intended inputs, files, and validation target. After approval, save the plan to
-   `.agents/memory/CURRENT_PLAN.md`.
+   `documentation/CURRENT_PLAN.md`.
 
 2. `/execute-new-notebook-code` creates the notebook or adds the approved new code
    to an existing notebook. It adds a runtime-provenance cell that asserts
