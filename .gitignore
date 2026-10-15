@@ -1,4 +1,4 @@
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 .DS_Store
@@ -36,14 +36,14 @@ local/
 
 # Notebook outputs and local Jupyter state
 /*.ipynb
-.ipynb_checkpoints/
+**/.ipynb_checkpoints/
 .jupyter/
 .jupyter_ystore.db
 
 # Local scripts and agent state
 /*.py
 /.claude
-.agents/memory/CURRENT_PLAN.md
+/documentation/CURRENT_PLAN.md
 .understand-anything/
 
 # Machine-specific Codex runtime
@@ -58,5 +58,12 @@ local_examples/
 
 _processed_cytof_pipeline_yishai/
 _processed_cytof_pipeline/
-som_ot_warp_repo_anchor/
-cytof_helper/
+/external/som_ot_warp_repo_anchor/
+/external/cytof_helper/
+
+# Generated experiment outputs
+/results/
+
+# Local raw CyTOF inputs
+/raw_dats/
+epigenetics_field_theory.egg-info/
