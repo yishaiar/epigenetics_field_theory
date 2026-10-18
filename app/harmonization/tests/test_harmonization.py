@@ -56,10 +56,16 @@ class HarmonizationTests(unittest.TestCase):
                 "H4": [7.0, 7.0, 7.0],
                 "DNA": ["x", "x", "x"],
                 "not_a_marker": [2.0, 4.0, 6.0],
+                "labels": ["basal", "classical", "basal"],
+                "leiden_cluster": pd.array([1, 2, 1], dtype="Int64"),
+                "annotation_present": [True, True, True],
             }
         )
 
-        scaled, valid, skipped, constant = zscore_markers(frame)
+        scaled, valid, skipped, constant = zscore_markers(
+            frame,
+            all_markers=["CD109", "H4", "DNA", "labels", "leiden_cluster", "annotation_present"],
+        )
 
         np.testing.assert_allclose(scaled["CD109"], [-np.sqrt(1.5), 0, np.sqrt(1.5)])
         self.assertEqual(scaled["H4"].tolist(), [0, 0, 0])
@@ -67,6 +73,11 @@ class HarmonizationTests(unittest.TestCase):
         self.assertEqual(valid, ["CD109", "H4"])
         self.assertEqual(skipped, ["DNA"])
         self.assertEqual(constant, ["H4"])
+        self.assertEqual(scaled["labels"].tolist(), frame["labels"].tolist())
+        self.assertEqual(scaled["leiden_cluster"].tolist(), frame["leiden_cluster"].tolist())
+        self.assertEqual(
+            scaled["annotation_present"].tolist(), frame["annotation_present"].tolist()
+        )
 
     def test_combine_preserves_experiment_order_and_saves_index_free_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

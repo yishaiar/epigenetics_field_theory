@@ -9,11 +9,19 @@ from .filtering import (
     split_cells_by_gfp,
 )
 from .gating import gate_histones, process_gated_files
-from .loading import load_raw_data, save_loading_summary, summarize_raw_data
+from .loading import (
+    add_cell_uid,
+    attach_annotation_labels,
+    load_raw_data,
+    save_loading_summary,
+    summarize_raw_data,
+)
 from .transformation import arcsinh_transform, process_arcsinh_files
 
 __all__ = [
     "arcsinh_transform",
+    "add_cell_uid",
+    "attach_annotation_labels",
     "find_marker_column",
     "find_cd45_column",
     "gate_histones",

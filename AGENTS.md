@@ -31,7 +31,7 @@ input CSV files
 
 The notebooks `01_preprocessing.ipynb`, `02_harmonization.ipynb`, `03_annotation.ipynb`, and `04_analysis.ipynb` correspond to those stages. Keep file boundaries, output paths, and table schemas explicit when passing data between stages. Workflow CSVs should be written without an implicit index unless a specific artifact contract requires one.
 
-Current workflow functions primarily accept and return pandas DataFrames or filesystem paths. Raw input CSVs live in the local, Git-ignored `raw_dats/` directory; generated workflow outputs remain under `results/experiment_<ddmmyy>/`. Validate required columns before processing, preserve row and marker alignment, and keep public function signatures typed. Use Pydantic v2 when introducing public request, configuration, or result schemas.
+Current workflow functions primarily accept and return pandas DataFrames or filesystem paths. Raw input CSVs live in the local, Git-ignored `raw_data/` directory; generated workflow outputs remain under `results/experiment_<ddmmyy>/`. Validate required columns before processing, preserve row and marker alignment, and keep public function signatures typed. Use Pydantic v2 when introducing public request, configuration, or result schemas.
 
 ### Source structure
 
@@ -42,7 +42,7 @@ app/
 ├── annotation/     # embeddings, clustering, labeling, and plots
 └── analysis/       # biological comparisons and KDE analyses
 notebooks/          # one notebook per workflow stage
-raw_dats/           # local, Git-ignored raw CSV inputs
+raw_data/           # local, Git-ignored raw CSV inputs
 results/            # generated, experiment-scoped outputs
 ```
 

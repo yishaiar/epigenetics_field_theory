@@ -31,7 +31,7 @@ not file by file, but phase by phase across the whole feature:
    helpers, docstrings covering behavior, arguments, and returns where
    applicable; give each public parameter its own `Args` entry.
 6. **Comment logical stages** — use brief comments to mark meaningful stages
-   when they clarify a function's flow.
+   and at each helper call explain what it contributes to the function.
 7. **Verify everything passes** — invoke `/test-changed-files` across all
    changed files
 8. **Diagnose against the plan** — both the implementation and its new

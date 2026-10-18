@@ -62,6 +62,28 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(normalized["ACSS2"].tolist(), [10.0, 12.0])
         self.assertEqual(self.frame["ACSS2"].tolist(), [5.0, 6.0])
 
+    def test_normalization_excludes_and_preserves_annotation_metadata(self) -> None:
+        data = self.frame.assign(
+            labels=["basal", "classical"],
+            leiden_cluster=pd.array([0, 1], dtype="Int64"),
+            annotation_present=[True, False],
+        )
+
+        normalized, markers = normalize_sample(
+            data,
+            NormalizationConfig,
+            lambda frame, config: NormalizationResult(frame.assign(labels=["changed", "changed"])),
+            ["H3.3", "H4"],
+            ["ACSS2", "labels", "leiden_cluster", "annotation_present"],
+        )
+
+        self.assertEqual(markers, ["ACSS2"])
+        self.assertEqual(normalized["labels"].tolist(), data["labels"].tolist())
+        self.assertEqual(normalized["leiden_cluster"].tolist(), data["leiden_cluster"].tolist())
+        self.assertEqual(
+            normalized["annotation_present"].tolist(), data["annotation_present"].tolist()
+        )
+
     def test_normalize_sample_rejects_missing_controls(self) -> None:
         frame = self.frame.drop(columns="H4")
 
