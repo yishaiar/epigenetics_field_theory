@@ -50,8 +50,12 @@ class ManualLabelTests(unittest.TestCase):
             predict_noise_xgboost(expression, np.array([-1, -1, -1]))
 
     def test_save_rejects_misaligned_cell_ids(self) -> None:
-        expression = pd.DataFrame({"cell_id": ["a", "b"], "GAL4": [0.1, 0.2]})
-        coordinates = pd.DataFrame({"cell_id": ["b", "a"], "UMAP1": [0.0, 1.0]})
+        expression = pd.DataFrame(
+            {"cell_id": ["a", "b"], "cell_uid": ["source:0", "source:1"], "GAL4": [0.1, 0.2]}
+        )
+        coordinates = pd.DataFrame(
+            {"cell_id": ["b", "a"], "cell_uid": ["source:1", "source:0"], "UMAP1": [0.0, 1.0]}
+        )
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError, "cell_id values/order"):
                 save_labeled_data(
@@ -59,20 +63,42 @@ class ManualLabelTests(unittest.TestCase):
                 )
 
     def test_save_keeps_expression_order_and_maps_labels(self) -> None:
-        expression = pd.DataFrame({"cell_id": ["a", "b"], "GAL4": [0.1, 0.2]})
-        coordinates = pd.DataFrame({"cell_id": ["a", "b"], "UMAP1": [0.0, 1.0]})
+        expression = pd.DataFrame(
+            {"cell_id": ["a", "b"], "cell_uid": ["source:0", "source:1"], "GAL4": [0.1, 0.2]}
+        )
+        coordinates = pd.DataFrame(
+            {"cell_id": ["a", "b"], "cell_uid": ["source:0", "source:1"], "UMAP1": [0.0, 1.0]}
+        )
         with tempfile.TemporaryDirectory() as directory:
-            result = save_labeled_data(
-                expression, coordinates, np.array([0, 1]), Path(directory) / "out.csv"
-            )
+            output_file = Path(directory) / "out.csv"
+            result = save_labeled_data(expression, coordinates, np.array([0, 1]), output_file)
+            saved = pd.read_csv(output_file)
         self.assertEqual(result["cell_id"].tolist(), ["a", "b"])
+        self.assertEqual(result["cell_uid"].tolist(), ["source:0", "source:1"])
         self.assertEqual(result["labels"].tolist(), ["classical", "basal"])
+        self.assertEqual(saved["cell_uid"].tolist(), ["source:0", "source:1"])
+
+    def test_save_rejects_misaligned_cell_uids(self) -> None:
+        expression = pd.DataFrame({"cell_id": ["a", "b"], "cell_uid": ["source:0", "source:1"]})
+        coordinates = pd.DataFrame({"cell_id": ["a", "b"], "cell_uid": ["source:1", "source:0"]})
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "cell_uid values/order"):
+                save_labeled_data(
+                    expression, coordinates, np.array([0, 1]), Path(directory) / "out.csv"
+                )
 
 
 class EmbeddingAndClusteringTests(unittest.TestCase):
     def test_marker_selection_preserves_requested_order(self) -> None:
         data = pd.DataFrame({"B": [1, 2], "A": [None, None]})
         self.assertEqual(get_umap_markers(data, ["A", "missing", "B"]), (["B"], ["A", "missing"]))
+
+    def test_marker_selection_excludes_numeric_annotation_metadata(self) -> None:
+        data = pd.DataFrame({"CD109": [1, 2], "leiden_cluster": [0, 1]})
+        self.assertEqual(
+            get_umap_markers(data, ["leiden_cluster", "CD109"]),
+            (["CD109"], ["leiden_cluster"]),
+        )
 
     def test_leiden_rejects_neighbor_count_outside_graph_bounds(self) -> None:
         data = pd.DataFrame({"UMAP1": [0.0, 1.0], "UMAP2": [0.0, 1.0]})

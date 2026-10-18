@@ -45,7 +45,7 @@ class FilteringReferenceUnitTests(unittest.TestCase):
 
     def test_split_matches_reference_for_high_low_and_cd45_excluded_cells(self) -> None:
         raw_path = (
-            PROJECT_ROOT / "raw_dats" / EXPERIMENT / "treated" / f"{SAMPLE_NAME}_raw_data.csv"
+            PROJECT_ROOT / "raw_data" / EXPERIMENT / "treated" / f"{SAMPLE_NAME}_raw_data.csv"
         )
         if not raw_path.is_file():
             raise unittest.SkipTest(f"Raw CSV is unavailable: {raw_path}")

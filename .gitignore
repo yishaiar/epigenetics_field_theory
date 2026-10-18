@@ -65,5 +65,6 @@ _processed_cytof_pipeline/
 /results/
 
 # Local raw CyTOF inputs
-/raw_dats/
+/raw_data/
+/demo_data/
 epigenetics_field_theory.egg-info/

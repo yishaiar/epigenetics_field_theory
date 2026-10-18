@@ -11,7 +11,14 @@ REQUIRED_COLUMNS = GATE_COLUMNS + ["cell_id", "sample_name", "condition"]
 
 
 def safe_name(x: object) -> str:
-    """Apply the source notebook's filename sanitization."""
+    """Convert a value to a filesystem-safe name.
+
+    Args:
+        x: Value to stringify and sanitize.
+
+    Returns:
+        A string with unsafe filename characters and whitespace replaced.
+    """
     x = str(x)
     x = re.sub(r'[<>:"/\\|?*]', "_", x)
     x = re.sub(r"\s+", "_", x)
@@ -19,17 +26,29 @@ def safe_name(x: object) -> str:
 
 
 def gate_histones(data: pd.DataFrame, source: Path | None = None) -> pd.DataFrame:
-    """Keep rows where numeric H3.3 and H4 are both strictly greater than five."""
+    """Keep cells whose raw H3.3 and H4 values are both greater than five.
+
+    Args:
+        data: Cell table containing the required gate and metadata columns.
+        source: Optional source path included in validation errors.
+
+    Returns:
+        A copy containing only cells that pass both gates.
+
+    Raises:
+        ValueError: If required columns or valid cell identifiers are missing.
+    """
     missing = [column for column in REQUIRED_COLUMNS if column not in data.columns]
     if missing:
         raise ValueError(f"Missing columns in file {source}: {missing}")
-    if data["cell_id"].isna().any():
+    if pd.isna(data["cell_id"].to_numpy()).any():
         raise ValueError(f"Missing cell_id values in file: {source}")
     if not data["cell_id"].is_unique:
         raise ValueError(f"cell_id is not unique in file: {source}")
     if data.empty:
         return data.copy()
-    if pd.isna(data["sample_name"].iloc[0]) or pd.isna(data["condition"].iloc[0]):
+    first_metadata_values = data.loc[:, ["sample_name", "condition"]].iloc[0].to_numpy()
+    if pd.isna(first_metadata_values).any():
         raise ValueError(f"Missing sample_name or condition in: {source}")
     gate_values = data[GATE_COLUMNS].apply(pd.to_numeric, errors="coerce")
     gate_mask = (gate_values > 5).all(axis=1)
@@ -39,7 +58,17 @@ def gate_histones(data: pd.DataFrame, source: Path | None = None) -> pd.DataFram
 def _gate_file(
     csv_file: Path, experiment: str, group: str, output_dir: Path
 ) -> dict[str, object] | None:
-    """Reload, gate, and save one split file using the source paths and names."""
+    """Gate one split CSV and save its output and cell-count summary.
+
+    Args:
+        csv_file: Split CSV to load and gate.
+        experiment: Experiment name used in the output path and summary.
+        group: GFP group used in the output path and summary.
+        output_dir: Root directory for gated files.
+
+    Returns:
+        A row of gate counts and file paths, or ``None`` when the input is empty.
+    """
     data = pd.read_csv(csv_file, low_memory=False)
     if data.empty:
         return None
@@ -74,7 +103,17 @@ def process_gated_files(
     experiments: list[str],
     groups: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Apply the source cell's sorted per-experiment, per-group file workflow."""
+    """Gate split CSV files and write the gated files and summary table.
+
+    Args:
+        split_dir: Root containing experiment and GFP-group directories.
+        output_dir: Destination root for gated files and summary CSV.
+        experiments: Experiment directories to process, in requested order.
+        groups: GFP groups to process; defaults to both high and low groups.
+
+    Returns:
+        A per-file table of gate counts and output paths.
+    """
     rows = []
     for experiment in experiments:
         for group in groups or ["GFP_high", "GFP_low"]:
@@ -100,7 +139,7 @@ def process_gated_files(
         "n_removed_by_gate",
         "pct_kept",
     ]
-    summary = pd.DataFrame(rows, columns=columns)
+    summary = pd.DataFrame(rows, columns=pd.Index(columns))
     output_dir.mkdir(parents=True, exist_ok=True)
     summary.to_csv(output_dir / "GATED_summary.csv", index=False)
     return summary

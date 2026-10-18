@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from time import perf_counter
-from typing import Any, cast
+from typing import Any
 
 import igraph as ig
 import leidenalg
@@ -20,7 +20,20 @@ from sklearn.neighbors import kneighbors_graph
 def calc_leiden(
     data: pd.DataFrame, n_neighbors: int = 30, resolution: float = 1.0, random_state: int = 42
 ) -> np.ndarray:
-    """Run the source notebook's symmetric kNN RBConfiguration Leiden clustering."""
+    """Cluster UMAP coordinates with a symmetric k-nearest-neighbor graph.
+
+    Args:
+        data: Table containing numeric ``UMAP1`` and ``UMAP2`` coordinates.
+        n_neighbors: Number of neighbors used to construct the graph.
+        resolution: Leiden RBConfiguration resolution parameter.
+        random_state: Seed passed to the Leiden partition algorithm.
+
+    Returns:
+        An integer cluster label for each row of ``data``.
+
+    Raises:
+        ValueError: If ``n_neighbors`` is outside the valid range for the rows.
+    """
     coordinates = data[["UMAP1", "UMAP2"]].to_numpy(dtype=float)
     if n_neighbors < 1 or n_neighbors >= len(coordinates):
         raise ValueError("n_neighbors must be between 1 and the number of cells minus 1")
@@ -55,7 +68,19 @@ def plot_clusters(
     point_size: int = 4,
     figsize: tuple[int, int] = (9, 7),
 ) -> None:
-    """Save the source notebook's labeled UMAP scatter."""
+    """Save and display a UMAP scatter colored by cluster label.
+
+    Args:
+        data: Table containing ``UMAP1`` and ``UMAP2`` coordinates.
+        labels: Cluster label aligned positionally with each data row.
+        title: Plot title.
+        out_file: Destination PNG path.
+        point_size: Marker size for plotted cells.
+        figsize: Figure width and height in inches.
+
+    Raises:
+        ValueError: If the number of labels does not match the data rows.
+    """
     values = np.asarray(labels)
     if len(values) != len(data):
         raise ValueError("Cluster label count must match the coordinate rows")
@@ -79,7 +104,16 @@ def _draw_cluster_points(
     cmap: Any,
     point_size: int,
 ) -> None:
-    """Draw cluster and noise points using source notebook colors."""
+    """Draw each cluster and, when present, the noise points on one axis.
+
+    Args:
+        ax: Matplotlib axis receiving the scatter points.
+        data: Table containing ``UMAP1`` and ``UMAP2`` coordinates.
+        values: Cluster label for each row of ``data``; ``-1`` denotes noise.
+        clusters: Non-noise cluster labels, in the order used for colors.
+        cmap: Colormap used to assign a color to each cluster.
+        point_size: Marker size for every plotted cell.
+    """
     for index, cluster in enumerate(clusters):
         mask = values == cluster
         ax.scatter(
@@ -115,7 +149,20 @@ def plot_clusters_by_condition(
     point_size: int = 4,
     alpha: float = 0.8,
 ) -> None:
-    """Save source-style Leiden panels separated by condition."""
+    """Save and display one cluster scatter panel per requested condition.
+
+    Args:
+        data: Table containing coordinates and a ``condition`` column.
+        labels: Cluster label aligned positionally with each data row.
+        conditions: Conditions to plot, in panel order.
+        out_file: Destination PNG path.
+        figsize: Figure width and height in inches.
+        point_size: Marker size for plotted cells.
+        alpha: Point opacity between zero and one.
+
+    Raises:
+        ValueError: If the number of labels does not match the data rows.
+    """
     values = np.asarray(labels)
     if len(values) != len(data):
         raise ValueError("Cluster label count must match the coordinate rows")
@@ -153,7 +200,20 @@ def _draw_condition_panel(
     point_size: int,
     alpha: float,
 ) -> None:
-    """Draw one source-style condition panel."""
+    """Draw cluster points and formatting for one condition panel.
+
+    Args:
+        ax: Matplotlib axis for the panel.
+        data: Table containing condition values and UMAP coordinates.
+        values: Cluster label aligned with each row of ``data``.
+        clusters: Cluster labels to render, including noise when present.
+        colors: Color assigned to each cluster label.
+        condition: Condition selected for this panel.
+        xlim: Shared horizontal coordinate limits.
+        ylim: Shared vertical coordinate limits.
+        point_size: Scatter marker size.
+        alpha: Point opacity.
+    """
     condition_mask = data["condition"].to_numpy() == condition
     _draw_condition_points(ax, data, values, clusters, colors, condition_mask, point_size, alpha)
     ax.set(
@@ -179,7 +239,18 @@ def _draw_condition_points(
     point_size: int,
     alpha: float,
 ) -> None:
-    """Draw all nonempty cluster scatters for a single condition."""
+    """Draw nonempty clusters for rows selected by a condition mask.
+
+    Args:
+        ax: Matplotlib axis receiving the scatter points.
+        data: Table containing ``UMAP1`` and ``UMAP2`` coordinates.
+        values: Cluster label aligned with each row of ``data``.
+        clusters: Cluster labels to draw.
+        colors: Color assigned to each cluster label.
+        condition_mask: Boolean row mask for the selected condition.
+        point_size: Scatter marker size.
+        alpha: Point opacity.
+    """
     for cluster in clusters:
         mask = condition_mask & (values == cluster)
         if mask.any():
@@ -207,24 +278,58 @@ def plot_cluster_heatmap(
     rot_dendrogram: bool = False,
     fmt: str = ".2f",
 ) -> tuple[sns.matrix.ClusterGrid, pd.DataFrame]:
-    """Create the source notebook's clustered mean-expression heatmap."""
+    """Create a clustered heatmap from per-cluster feature means.
+
+    Args:
+        data: Table containing feature values.
+        labels: Cluster label aligned positionally with each data row.
+        features: Candidate feature columns to summarize.
+        out_file: Destination image path.
+        title: Heatmap title.
+        figsize: Figure width and height in inches.
+        amin: Optional lower color scale limit; inferred from the data if absent.
+        amax: Optional upper color scale limit; inferred from the data if absent.
+        rot_dendrogram: Cluster rows instead of columns when true.
+        fmt: Numeric format for cell annotations.
+
+    Returns:
+        The rendered Seaborn grid and the untransposed cluster-mean table.
+
+    Raises:
+        ValueError: If labels are misaligned or no usable requested features exist.
+    """
     means = _calculate_cluster_means(data, labels, features)
     heatmap = means.T
-    amin = cast(float, heatmap.min().min() if amin is None else amin)
-    amax = cast(float, heatmap.max().max() if amax is None else amax)
+    amin_value = float(heatmap.min().min()) if amin is None else amin
+    amax_value = float(heatmap.max().max()) if amax is None else amax
     row_cluster, col_cluster = (False, True) if rot_dendrogram else (True, False)
-    grid = _make_heatmap(heatmap, row_cluster, col_cluster, figsize, amin, amax, fmt, title)
+    grid = _make_heatmap(
+        heatmap, row_cluster, col_cluster, figsize, amin_value, amax_value, fmt, title
+    )
     out_file.parent.mkdir(parents=True, exist_ok=True)
     grid.figure.savefig(out_file, dpi=300, bbox_inches="tight")
     plt.show()
     plt.close(grid.figure)
-    return grid, cast(pd.DataFrame, means)
+    return grid, means
 
 
 def _calculate_cluster_means(
     data: pd.DataFrame, labels: np.ndarray, features: list[str]
 ) -> pd.DataFrame:
-    """Calculate source cluster means while retaining positional label alignment."""
+    """Calculate numeric feature means for each positionally aligned cluster.
+
+    Args:
+        data: Cell table containing candidate feature columns.
+        labels: Cluster label aligned with each row of ``data``.
+        features: Candidate feature names to summarize.
+
+    Returns:
+        A table of per-cluster feature means, with display names as its index.
+
+    Raises:
+        ValueError: If labels are misaligned or no complete numeric features
+            remain.
+    """
     if len(labels) != len(data):
         raise ValueError(f"Labels length ({len(labels)}) != DataFrame length ({len(data)})")
     available = [feature for feature in features if feature in data.columns]
@@ -232,12 +337,18 @@ def _calculate_cluster_means(
         raise ValueError("No requested features found in DataFrame")
     expression = data[available].apply(pd.to_numeric, errors="coerce").copy()
     expression["_cluster"] = np.asarray(labels)
-    means = cast(pd.DataFrame, expression.groupby("_cluster", sort=True).mean())
+    means = pd.DataFrame(expression.groupby("_cluster", sort=True).mean())
     if means.empty:
         raise ValueError("No valid cluster data available")
     means.index = ["Noise (-1)" if label == -1 else f"Cluster {label}" for label in means.index]
-    means = means.drop(columns=means.columns[means.isna().all()].tolist())
-    if means.shape[1] == 0 or cast(Any, means.isna().any()).any():
+    missing_values = means.isna().to_numpy()
+    columns_to_keep = [
+        str(column)
+        for column, all_missing in zip(means.columns, missing_values.all(axis=0), strict=True)
+        if not all_missing
+    ]
+    means = pd.DataFrame(means.loc[:, columns_to_keep])
+    if means.shape[1] == 0 or means.isna().to_numpy().any():
         raise ValueError("Cluster means contain no usable numeric features")
     return means
 
@@ -252,13 +363,27 @@ def _make_heatmap(
     fmt: str,
     title: str,
 ) -> sns.matrix.ClusterGrid:
-    """Render the source-style annotated and hierarchically clustered heatmap."""
+    """Render an annotated heatmap with optional row and column clustering.
+
+    Args:
+        heatmap: Feature-by-cluster values to display.
+        row_cluster: Whether to hierarchically cluster features.
+        col_cluster: Whether to hierarchically cluster clusters.
+        figsize: Figure dimensions in inches.
+        amin: Minimum color scale value.
+        amax: Maximum color scale value.
+        fmt: Numeric format for cell annotations.
+        title: Figure title.
+
+    Returns:
+        The Seaborn cluster grid containing the rendered heatmap.
+    """
+    color_limit = max(abs(amin), abs(amax))
     grid = sns.clustermap(
         heatmap,
         cmap=plt.cm.seismic,
-        vmin=amin,
-        vmax=amax,
-        center=0,
+        vmin=-color_limit,
+        vmax=color_limit,
         row_cluster=row_cluster and heatmap.shape[0] > 1,
         col_cluster=col_cluster and heatmap.shape[1] > 1,
         figsize=figsize,

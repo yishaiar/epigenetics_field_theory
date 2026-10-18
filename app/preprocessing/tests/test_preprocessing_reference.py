@@ -24,7 +24,7 @@ class PreprocessingReferenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.project_root = Path(__file__).resolve().parents[3]
-        cls.raw_root = cls.project_root / "raw_dats"
+        cls.raw_root = cls.project_root / "raw_data"
         cls.reference_root = cls.project_root / "_processed_cytof_pipeline_yishai"
         if not cls.raw_root.is_dir() or not cls.reference_root.is_dir():
             raise unittest.SkipTest("Local CyTOF inputs or reference outputs are unavailable")

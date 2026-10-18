@@ -48,6 +48,28 @@ class BatchCorrectionTests(unittest.TestCase):
         self.assertNotIn("invalid", corrected.columns)
         self.assertEqual(self.model.batch_labels.tolist(), ["batch2", "batch2"])
 
+    def test_annotation_metadata_is_excluded_from_batch_correction(self) -> None:
+        data = self.frame.assign(
+            labels=["basal", "classical"],
+            leiden_cluster=pd.array([0, 1], dtype="Int64"),
+            annotation_present=[True, False],
+        )
+
+        corrected = batch_correct(
+            data,
+            ["marker", "leiden_cluster", "annotation_present"],
+            "batch2",
+            self.model,
+            ["labels"],
+        )
+
+        np.testing.assert_allclose(corrected["marker"], data["marker"])
+        self.assertEqual(corrected["labels"].tolist(), data["labels"].tolist())
+        self.assertEqual(corrected["leiden_cluster"].tolist(), data["leiden_cluster"].tolist())
+        self.assertEqual(
+            corrected["annotation_present"].tolist(), data["annotation_present"].tolist()
+        )
+
     def test_nonfinite_input_is_rejected(self) -> None:
         data = self.frame.copy()
         data.loc[0, "marker"] = np.inf
