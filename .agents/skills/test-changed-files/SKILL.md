@@ -1,5 +1,5 @@
 ---
-name: babysit-tests
+name: test-changed-files
 description: |
   Run tests only for files that changed, automatically fix common failures,
   and loop until all relevant tests pass. Use when the user says "run tests",
@@ -7,7 +7,7 @@ description: |
   changes. Never runs the full test suite — only tests tied to changed files.
 ---
 
-# Babysit Tests
+# Test Changed Files
 
 Find which files changed, run only their tests, fix failures, repeat until green.
 
@@ -44,14 +44,14 @@ Run each test file individually:
 uv run pytest <path/to/test_file.py> -v
 ```
 
-Never run the whole suite unless explicitly asked; run the owning member's
-test directory instead.
-
+- Never run the whole suite unless explicitly asked; run the owning member's test directory instead.
+- After implementation changes, run the mapped tests immediately without waiting for a separate request.
 - Run each selected pytest command in a `gpt-6-luna` subagent.
 - Report every run in the main conversation:
   - **Passed:** command and test counts; mention warnings if present.
   - **Failed:** command and brief failure summary.
 - Keep full output in the subagent unless debugging requires relevant details.
+
 
 ## Step 4 — Diagnose and fix failures
 

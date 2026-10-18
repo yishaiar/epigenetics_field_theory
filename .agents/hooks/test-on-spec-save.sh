@@ -1,6 +1,6 @@
 #!/bin/bash
 # This automatic save hook runs pytest in the current tool session. It is an
-# intentional exception to the subagent guidance in /babysit-tests.
+# intentional exception to the subagent guidance in /test-changed-files.
 # Runs uv run pytest on the changed test file after every Edit or Write to a test_*.py file.
 # ==============================================================================
 # Script: test-on-spec-save.sh

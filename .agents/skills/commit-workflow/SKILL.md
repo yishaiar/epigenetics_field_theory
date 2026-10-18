@@ -20,7 +20,7 @@ under `scbatch/` (e.g. `scbatch/pp/...` → `pp`).
 ### 2. Run tests for changed files only
 
 For each changed file that has a corresponding `test_*.py`, run it individually
-following `/babysit-tests` for concise reporting and returning failure details
+following `/test-changed-files` for concise reporting and returning failure details
 when debugging is needed.
 
 Never run the whole suite unless explicitly asked; run the owning workspace
@@ -45,7 +45,7 @@ Run lint for every member or directory that has at least one changed file.
 ### 5. Fix before committing
 
 - **Lint errors** — fix them. Common: unused imports, trailing whitespace, missing type hints.
-- **Test failures** — follow the `babysit-tests` skill rules: fix if it's a stale assertion or missing mock fixture; stop and report if it's a real regression.
+- **Test failures** — follow the `test-changed-files` skill rules: fix if it's a stale assertion or missing mock fixture; stop and report if it's a real regression.
 - Do not commit if any check is still failing.
 
 ---

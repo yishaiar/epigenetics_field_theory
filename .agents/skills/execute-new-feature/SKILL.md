@@ -27,19 +27,26 @@ not file by file, but phase by phase across the whole feature:
    specific exceptions, never a bare `except`
 4. **Write tests** — invoke `/write-tests` for this phase and follow its
    guidance
-5. **Update docs** — add a docstring to every new public function
-6. **Verify everything passes** — invoke `/babysit-tests` across all
+5. **Document functions** — give nontrivial functions, including private
+   helpers, docstrings covering behavior, arguments, and returns where
+   applicable; give each public parameter its own `Args` entry.
+6. **Comment logical stages** — use brief comments to mark meaningful stages
+   when they clarify a function's flow.
+7. **Verify everything passes** — invoke `/test-changed-files` across all
    changed files
-7. **Diagnose against the plan** — both the implementation and its new
+8. **Diagnose against the plan** — both the implementation and its new
    tests were just written, don't default to blaming either; fix
    whichever doesn't match the plan's intent
 
 Each `Edit`/`Write` automatically triggers `.agents/hooks/` (format/lint/
 test-on-save) — fix whatever they surface before moving on.
 
-## Rules
+## Guide Lines
 
-- Never write a function longer than 40 lines — split if needed
-- Type hints required on every function signature
-- Every async function must handle exceptions explicitly
-- Follow the approved plan's file list and order — don't improvise scope beyond it
+1. Keep functions as short as practical and aim for fewer than 40 lines, excluding inner helper definitions. Treat this as a target, not a reason to split a coherent workflow into multiple functions.
+2. Extract a helper only when naming its distinct task makes the code easier to understand; otherwise, keep the step inline.
+3. Define a helper at module level when it is reused or has a clear contract that benefits from independent understanding or testing. Keep it an inner function when it is tightly coupled to that one specific function.
+4. Keep simple, obvious steps inline. Don't create helpers solely to reduce line count.
+5. Add type hints to every function signature.
+6. Handle exceptions explicitly in every async function.
+7. Follow the approved plan's file list and order; don't improvise beyond its scope.

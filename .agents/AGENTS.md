@@ -55,6 +55,7 @@ The project is platform-neutral and supports macOS, Linux, and Windows. Do not a
 - **Pydantic for all API schemas**. Use Pydantic v2 models for request, configuration, and result validation. No raw dictionaries at public API boundaries.
 - **No bare `except`**. Always catch specific exceptions.
 - **Type hints required**. All public function signatures must have type hints.
+- **Do not use `typing.cast()`**. Write code so types can be inferred or use explicit annotations where needed.
 - **Ruff must pass**. Run `uv run ruff check .` before any PR. Ruff is the primary linter.
 - **AnnData contracts are explicit**. Preserve sparse data and axis alignment. Store provenance and method parameters in `adata.uns`, intermediate data in named layers, and embeddings or graphs in standard AnnData slots.
 
@@ -101,7 +102,7 @@ Skills below cover structured processes. The per-file execution-validation loop 
 | User asks what code does or wants to understand it before changing it | `/explain-code` |
 | After resolving a bug, learning a pattern, or making an architectural decision | `/update-memory` |
 | User wants to log or track a feature, fix, or improvement for a release | `/track-release-feature` |
-| User says run tests, fix tests, make tests green, or after code changes | `/babysit-tests` |
+| User says run tests, fix tests, make tests green, or after code changes | `/test-changed-files` |
 | User shares or pastes a skill file, asks if it is safe, or wants to audit one | `/skill-scanner` |
 | User finishes or pauses complex feature work and wants to save context | `/save-feature-context` |
 | User asks to start Jupyter, check its connection, or verify that a live Jupyter kernel connection is available | `/start-jupyter-server` |
@@ -121,7 +122,7 @@ For implementing a new feature end-to-end, skills chain in this order. These are
 
    Clear the conversation here.
 
-2. `/execute-new-feature` loads the approved plan from `documentation/CURRENT_PLAN.md`, then implements it phase by phase: types, logic, error handling, tests, and documentation. It invokes `/write-tests`, then `/babysit-tests` to verify the result.
+2. `/execute-new-feature` loads the approved plan from `documentation/CURRENT_PLAN.md`, then implements it phase by phase: types, logic, error handling, tests, and documentation. It invokes `/write-tests`, then `/test-changed-files` to verify the result.
 
    Clear the conversation here.
 
