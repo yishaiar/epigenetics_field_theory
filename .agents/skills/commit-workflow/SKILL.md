@@ -12,10 +12,10 @@ Before committing, always format, test, and lint every changed file. Only commit
 
 ## Pre-Commit Checks
 
-### 1. Determine affected workspace members
+### 1. Determine affected modules
 
-Map each changed file to its app by taking the directory name directly
-under `scbatch/` (e.g. `scbatch/pp/...` → `pp`).
+Map each changed file to its module by taking the directory name directly
+under `app/` (e.g. `app/preprocessing/...` → `preprocessing`).
 
 ### 2. Run tests for changed files only
 
@@ -24,23 +24,23 @@ following `/test-changed-files` for concise reporting and returning failure deta
 when debugging is needed.
 
 Never run the whole suite unless explicitly asked; run the owning workspace
-member's local tests.
+module's local tests.
 
 ### 3. Run the formatter for changed files
 
 ```bash
-uv run ruff format scbatch/<member>
+uv run ruff format app/<module>
 ```
 
 Safe to auto-apply — purely cosmetic, same as the `format-on-save.sh` hook. Re-stage any files it touches.
 
-### 4. Run lint for affected workspace members
+### 4. Run lint for affected modules
 
 ```bash
-uv run ruff check scbatch/<member>
+uv run ruff check app/<module>
 ```
 
-Run lint for every member or directory that has at least one changed file.
+Run lint for every module or directory that has at least one changed file.
 
 ### 5. Fix before committing
 

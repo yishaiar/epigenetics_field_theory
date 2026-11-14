@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from app.preprocessing.filtering import (
+from app.cell_selection.filtering import (
     find_cd45_column,
     find_marker_column,
     plot_cd45_histograms,
@@ -15,15 +15,15 @@ from app.preprocessing.filtering import (
     save_gfp_split,
     split_cells_by_gfp,
 )
-from app.preprocessing.gating import gate_histones, process_gated_files
-from app.preprocessing.loading import (
+from app.cell_selection.gating import process_gated_files
+from app.cell_selection.loading import (
     add_cell_uid,
     attach_annotation_labels,
     load_raw_data,
     save_loading_summary,
     summarize_raw_data,
 )
-from app.preprocessing.transformation import arcsinh_transform, process_arcsinh_files
+from app.cell_selection.transformation import process_arcsinh_files
 
 
 class PreprocessingTests(unittest.TestCase):
@@ -86,39 +86,6 @@ class PreprocessingTests(unittest.TestCase):
             self.assertEqual(saved["cell_id"].tolist(), ["a-high"])
             self.assertFalse(any(column.startswith("Unnamed:") for column in saved.columns))
 
-    def test_histone_gate_uses_strict_raw_thresholds(self) -> None:
-        data = self.frame.copy()
-        data.loc[1, "H3.3"] = 5
-        data.loc[2, "H4"] = 5
-
-        gated = gate_histones(data)
-
-        self.assertEqual(gated["cell_id"].tolist(), ["a-high", "no-high"])
-
-    def test_arcsinh_transforms_markers_but_preserves_metadata(self) -> None:
-        legacy_frame = self.frame.assign(**{"Unnamed: 0": range(len(self.frame))})
-
-        transformed, columns = arcsinh_transform(legacy_frame)
-
-        self.assertEqual(columns, ["CD45", "GFP", "H3.3", "H4", "marker"])
-        self.assertNotIn("Unnamed: 0", transformed.columns)
-        self.assertEqual(transformed["cell_id"].tolist(), self.frame["cell_id"].tolist())
-        self.assertEqual(transformed["source_path"].tolist(), self.frame["source_path"].tolist())
-        np.testing.assert_allclose(transformed["marker"], np.arcsinh(self.frame["marker"] / 5))
-
-    def test_annotation_columns_are_preserved_without_arcsinh_transformation(self) -> None:
-        data = self.frame.assign(
-            labels=["basal", "classical", pd.NA, pd.NA],
-            leiden_cluster=pd.array([1, 2, pd.NA, pd.NA], dtype="Int64"),
-            annotation_present=[True, True, False, False],
-        )
-
-        transformed, columns = arcsinh_transform(data)
-
-        for column in ("labels", "leiden_cluster", "annotation_present"):
-            self.assertNotIn(column, columns)
-            self.assertEqual(transformed[column].tolist(), data[column].tolist())
-
     def test_load_and_summary_preserve_sorted_file_order_and_counts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -139,8 +106,10 @@ class PreprocessingTests(unittest.TestCase):
             loaded = attach_annotation_labels(loaded, annotations)
             summary = summarize_raw_data(loaded)
 
+            self.assertNotIn("batch", loaded.columns)
+            self.assertFalse(loaded["experiment"].isna().any())
             self.assertEqual(loaded["cell_id"].tolist(), ["a-high", "a-low"])
-            self.assertEqual(loaded["annotation_present"].tolist(), [False, False])
+            self.assertNotIn("annotation_present", loaded.columns)
             self.assertTrue(loaded["labels"].isna().all())
             self.assertTrue(loaded["leiden_cluster"].isna().all())
             self.assertEqual(summary["n_cells"].tolist(), [2])
@@ -154,7 +123,7 @@ class PreprocessingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "No annotations file found"):
                 attach_annotation_labels(data, Path(temporary) / "missing_annotations.csv")
 
-    def test_annotation_map_is_joined_by_cell_uid_and_presence_is_derived(self) -> None:
+    def test_annotation_map_is_joined_by_cell_uid_without_presence_column(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             experiment = root / "batch2"
@@ -181,7 +150,7 @@ class PreprocessingTests(unittest.TestCase):
             self.assertEqual(loaded.loc[1, "labels"], "classical")
             self.assertTrue(pd.isna(loaded.loc[0, "leiden_cluster"]))
             self.assertEqual(loaded.loc[1, "leiden_cluster"], 3)
-            self.assertEqual(loaded["annotation_present"].tolist(), [False, True])
+            self.assertNotIn("annotation_present", loaded.columns)
 
     def test_annotation_uid_found_in_input_receives_its_annotation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -204,7 +173,7 @@ class PreprocessingTests(unittest.TestCase):
             self.assertEqual(labeled.index.tolist(), [10, 20])
             self.assertEqual(labeled.loc[20, "labels"], "basal")
             self.assertEqual(labeled.loc[20, "leiden_cluster"], 0)
-            self.assertTrue(labeled.loc[20, "annotation_present"])
+            self.assertNotIn("annotation_present", labeled.columns)
 
     def test_marker_lookup_prefers_exact_case_insensitive_match(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -254,13 +223,17 @@ class PreprocessingTests(unittest.TestCase):
             root = Path(temporary)
             split_file = root / "split" / "batch2" / "GFP_high" / "sample.csv"
             split_file.parent.mkdir(parents=True)
-            self.frame.to_csv(split_file, index=False)
+            workflow_frame = self.frame.copy()
+            workflow_frame["CD45"] = self.cd45_boundary
+            workflow_frame["GFP"] = self.gfp_boundary
+            workflow_frame["marker"] = 5.0
+            workflow_frame.to_csv(split_file, index=False)
             gated_root = root / "gated"
             summary = process_gated_files(root / "split", gated_root, ["batch2"])
             gated_file = gated_root / "batch2" / "GFP_high" / "treated" / "a_GFP_high_GATED.csv"
             gated = pd.read_csv(gated_file)
             self.assertEqual(summary["n_gated_cells"].tolist(), [4])
-            self.assertEqual(gated["cell_id"].tolist(), self.frame["cell_id"].tolist())
+            self.assertEqual(gated["cell_id"].tolist(), workflow_frame["cell_id"].tolist())
 
             arcsinh_root = root / "arcsinh"
             arcsinh_summary = process_arcsinh_files(gated_root, arcsinh_root)

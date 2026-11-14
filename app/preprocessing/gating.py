@@ -1,145 +1,76 @@
-"""Raw H3.3/H4 gating extracted from main1.ipynb cell 21."""
+"""Gate histone signal and remove per-mouse marker outliers."""
 
-import re
-from pathlib import Path
+from collections.abc import Sequence
 
 import pandas as pd
 
+from app.config.config import METADATA_COLUMNS
 
-GATE_COLUMNS = ["H3.3", "H4"]
-REQUIRED_COLUMNS = GATE_COLUMNS + ["cell_id", "sample_name", "condition"]
-
-
-def safe_name(x: object) -> str:
-    """Convert a value to a filesystem-safe name.
-
-    Args:
-        x: Value to stringify and sanitize.
-
-    Returns:
-        A string with unsafe filename characters and whitespace replaced.
-    """
-    x = str(x)
-    x = re.sub(r'[<>:"/\\|?*]', "_", x)
-    x = re.sub(r"\s+", "_", x)
-    return x
+GATE_COLUMNS = ("H3.3", "H4")
 
 
-def gate_histones(data: pd.DataFrame, source: Path | None = None) -> pd.DataFrame:
-    """Keep cells whose raw H3.3 and H4 values are both greater than five.
+def gate_histones(
+    data: pd.DataFrame,
+    skip_columns: list[str] | None = None,
+    core_gate_value: float = 5,
+    lower_outlier_quantile: float = 0.0001,
+    upper_outlier_quantile: float = 0.9999,
+    gate_columns: Sequence[str] = GATE_COLUMNS,
+) -> tuple[pd.DataFrame, list[str]]:
+    """Keep cells above the histone gate and within each mouse's marker bounds.
 
     Args:
-        data: Cell table containing the required gate and metadata columns.
-        source: Optional source path included in validation errors.
+        data: Cell table with raw histone and marker columns.
+        skip_columns: Additional metadata columns excluded from marker selection.
+        core_gate_value: Both gate markers must be strictly greater than this value.
+        lower_outlier_quantile: Per-mouse lower marker quantile to retain.
+        upper_outlier_quantile: Per-mouse upper marker quantile to retain.
+        gate_columns: Histone columns used for the strict core gate.
 
     Returns:
-        A copy containing only cells that pass both gates.
+        The retained rows and all nonmetadata input columns considered for gating.
 
     Raises:
-        ValueError: If required columns or valid cell identifiers are missing.
+        ValueError: If gate columns are missing or quantiles are invalid.
     """
-    missing = [column for column in REQUIRED_COLUMNS if column not in data.columns]
+    missing = [column for column in gate_columns if column not in data]
     if missing:
-        raise ValueError(f"Missing columns in file {source}: {missing}")
-    if pd.isna(data["cell_id"].to_numpy()).any():
-        raise ValueError(f"Missing cell_id values in file: {source}")
-    if not data["cell_id"].is_unique:
-        raise ValueError(f"cell_id is not unique in file: {source}")
-    if data.empty:
-        return data.copy()
-    first_metadata_values = data.loc[:, ["sample_name", "condition"]].iloc[0].to_numpy()
-    if pd.isna(first_metadata_values).any():
-        raise ValueError(f"Missing sample_name or condition in: {source}")
-    gate_values = data[GATE_COLUMNS].apply(pd.to_numeric, errors="coerce")
-    gate_mask = (gate_values > 5).all(axis=1)
-    return data.loc[gate_mask].copy()
+        raise ValueError(f"Missing histone gate columns: {missing}")
+    if not 0 <= lower_outlier_quantile < upper_outlier_quantile <= 1:
+        raise ValueError("Outlier quantiles must satisfy 0 <= lower < upper <= 1")
 
+    excluded = set(METADATA_COLUMNS)
+    if skip_columns is not None:
+        excluded.update(skip_columns)
+    marker_columns = [column for column in data.columns if column not in excluded]
+    gate_values = data[list(gate_columns)].apply(pd.to_numeric, errors="coerce")
+    gated = data.loc[gate_values.gt(core_gate_value).all(axis=1)].copy()
+    if gated.empty:
+        return gated, marker_columns
 
-def _gate_file(
-    csv_file: Path, experiment: str, group: str, output_dir: Path
-) -> dict[str, object] | None:
-    """Gate one split CSV and save its output and cell-count summary.
+    marker_values = gated[marker_columns].apply(pd.to_numeric, errors="coerce")
+    marker_values = marker_values.loc[:, marker_values.notna().any()]
+    if marker_values.empty:
+        return gated, marker_columns
 
-    Args:
-        csv_file: Split CSV to load and gate.
-        experiment: Experiment name used in the output path and summary.
-        group: GFP group used in the output path and summary.
-        output_dir: Root directory for gated files.
+    sample_columns = [c for c in ("sample_name", "experiment", "condition") if c in gated]
+    if "sample_name" not in gated:
+        groups = [(None, gated)]
+    else:
+        groups = gated.groupby(sample_columns, sort=False, dropna=False)
 
-    Returns:
-        A row of gate counts and file paths, or ``None`` when the input is empty.
-    """
-    data = pd.read_csv(csv_file, low_memory=False)
-    if data.empty:
-        return None
-    gated = gate_histones(data, csv_file)
-    sample_name = data["sample_name"].iloc[0]
-    condition = data["condition"].iloc[0]
-    target_dir = output_dir / experiment / group / safe_name(condition)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / f"{safe_name(sample_name)}_{group}_GATED.csv"
-    gated.to_csv(target, index=False)
-    n_input = len(data)
-    n_gated = len(gated)
-    return {
-        "experiment": experiment,
-        "condition": condition,
-        "sample_name": sample_name,
-        "gfp_group": group,
-        "input_file": str(csv_file),
-        "gated_file": str(target),
-        "gate_columns": " | ".join(GATE_COLUMNS),
-        "gate_rule": "H3.3 > 5 and H4 > 5 on raw values",
-        "n_input_cells": n_input,
-        "n_gated_cells": n_gated,
-        "n_removed_by_gate": n_input - n_gated,
-        "pct_kept": 100 * n_gated / n_input if n_input > 0 else 0,
-    }
+    keep_rows = pd.Series(False, index=gated.index)
+    for _, sample in groups:
+        values = marker_values.loc[sample.index]
+        values = values.loc[:, values.notna().any()]
+        if values.empty:
+            keep_rows.loc[sample.index] = True
+            continue
+        bounds = values.quantile([lower_outlier_quantile, upper_outlier_quantile])
+        within_lower_bound = values.isna() | values.ge(bounds.loc[lower_outlier_quantile])
+        within_upper_bound = values.isna() | values.le(bounds.loc[upper_outlier_quantile])
+        keep_rows.loc[sample.index] = within_lower_bound.all(axis=1) & within_upper_bound.all(
+            axis=1
+        )
 
-
-def process_gated_files(
-    split_dir: Path,
-    output_dir: Path,
-    experiments: list[str],
-    groups: list[str] | None = None,
-) -> pd.DataFrame:
-    """Gate split CSV files and write the gated files and summary table.
-
-    Args:
-        split_dir: Root containing experiment and GFP-group directories.
-        output_dir: Destination root for gated files and summary CSV.
-        experiments: Experiment directories to process, in requested order.
-        groups: GFP groups to process; defaults to both high and low groups.
-
-    Returns:
-        A per-file table of gate counts and output paths.
-    """
-    rows = []
-    for experiment in experiments:
-        for group in groups or ["GFP_high", "GFP_low"]:
-            input_dir = split_dir / experiment / group
-            if not input_dir.is_dir():
-                continue
-            files = sorted(input_dir.glob("*.csv"))
-            for csv_file in files:
-                result = _gate_file(csv_file, experiment, group, output_dir)
-                if result is not None:
-                    rows.append(result)
-    columns = [
-        "experiment",
-        "condition",
-        "sample_name",
-        "gfp_group",
-        "input_file",
-        "gated_file",
-        "gate_columns",
-        "gate_rule",
-        "n_input_cells",
-        "n_gated_cells",
-        "n_removed_by_gate",
-        "pct_kept",
-    ]
-    summary = pd.DataFrame(rows, columns=pd.Index(columns))
-    output_dir.mkdir(parents=True, exist_ok=True)
-    summary.to_csv(output_dir / "GATED_summary.csv", index=False)
-    return summary
+    return gated.loc[keep_rows].copy(), marker_columns

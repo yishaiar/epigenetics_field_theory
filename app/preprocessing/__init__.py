@@ -1,37 +1,53 @@
-"""Raw CyTOF data loading and preprocessing."""
+"""Notebook-extracted batch harmonization and scaling operations."""
 
-from .filtering import (
-    find_cd45_column,
-    find_marker_column,
-    plot_cd45_histograms,
-    plot_gfp_histograms,
-    save_gfp_split,
-    split_cells_by_gfp,
+from .balancing import balance_samples, process_balancing_files, subsample_gfp_high
+from .batch_correction import (
+    apply_fitted_batch_correction,
+    batch_correct,
+    fit_batch_correction,
+    fit_batch_correction_data,
+    process_batch_correction,
+    process_batch_correction_data,
+    process_batch_correction_files,
+    select_correction_markers,
 )
-from .gating import gate_histones, process_gated_files
-from .loading import (
-    add_cell_uid,
-    attach_annotation_labels,
-    load_raw_data,
-    save_loading_summary,
-    summarize_raw_data,
+from .gating import gate_histones
+from .normalization import (
+    normalize_pooled_dataframe,
+    normalize_sample,
+    process_normalization_files,
 )
-from .transformation import arcsinh_transform, process_arcsinh_files
+from .pooling import pool_csv_files
+from .scaling import (
+    combine_scaled_experiments,
+    hierarchical_zscore,
+    process_scaling_files,
+    zscore_markers,
+    zscore_markers_from_balanced_reference,
+)
+from .arcsinh_transform import arcsinh_transform
 
 __all__ = [
+    "balance_samples",
     "arcsinh_transform",
-    "add_cell_uid",
-    "attach_annotation_labels",
-    "find_marker_column",
-    "find_cd45_column",
+    "apply_fitted_batch_correction",
+    "batch_correct",
+    "combine_scaled_experiments",
+    "fit_batch_correction",
+    "fit_batch_correction_data",
     "gate_histones",
-    "load_raw_data",
-    "plot_cd45_histograms",
-    "plot_gfp_histograms",
-    "process_arcsinh_files",
-    "process_gated_files",
-    "save_gfp_split",
-    "save_loading_summary",
-    "split_cells_by_gfp",
-    "summarize_raw_data",
+    "hierarchical_zscore",
+    "normalize_sample",
+    "process_batch_correction",
+    "process_normalization_files",
+    "normalize_pooled_dataframe",
+    "pool_csv_files",
+    "process_balancing_files",
+    "subsample_gfp_high",
+    "process_batch_correction_files",
+    "process_batch_correction_data",
+    "process_scaling_files",
+    "select_correction_markers",
+    "zscore_markers",
+    "zscore_markers_from_balanced_reference",
 ]

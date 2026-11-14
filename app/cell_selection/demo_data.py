@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-EXPERIMENTS = ["batch2", "batch3", "batch4_extra_treatment"]
+from app.config.config import EXPERIMENTS
 
 REQUIRED_DEMO_COLUMNS = {
     "cell_id",
@@ -114,7 +114,7 @@ def generate_demo_dataset(
 
 def main() -> None:
     """Generate the local demo fixture using the standard project locations."""
-    from app.dotenv import data_dir, project_dir
+    from app.config import data_dir, project_dir
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=Path, default=data_dir)

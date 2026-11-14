@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
+
+from app.config.config import METADATA_COLUMNS
+from app.utils.xgboost import fit_xgboost_probabilities
 
 
 def assign_manual_labels(data: pd.DataFrame) -> np.ndarray:
@@ -35,9 +38,9 @@ def predict_noise_xgboost(
     learning_rate: float = 0.1,
     random_state: int = 42,
     n_jobs: int = 1,
-    features: list[str] | None = None,
-) -> tuple[np.ndarray, XGBClassifier | None]:
-    """Predict labels for unassigned cells from the manually labeled cells.
+    features: Sequence[str] | None = None,
+) -> tuple[np.ndarray, np.ndarray | None, XGBClassifier | None]:
+    """Train from manual labels, then predict labels and probabilities for every row.
 
     Args:
         data: Table containing the selected classifier feature columns.
@@ -47,91 +50,47 @@ def predict_noise_xgboost(
         learning_rate: Boosting learning rate.
         random_state: Seed for classifier training.
         n_jobs: Number of parallel workers.
-        features: Feature columns; defaults to GAL4, GATA6, and TSPAN8.
+        features: Optional feature columns; by default, all numeric, nonmetadata
+            columns except UMAP coordinates.
 
     Returns:
-        Final labels and the fitted classifier, or ``None`` if no fit was needed.
+        Predicted labels, probabilities aligned with every input row (or
+        ``None`` for single-class training), and the fitted classifier (or
+        ``None`` for single-class training).
 
     Raises:
         ValueError: If labels are misaligned or there are no labeled cells.
     """
-    features = ["GAL4", "GATA6", "TSPAN8"] if features is None else features
-    matrix = data[features].to_numpy(dtype=np.float32)
+    if features is None:
+        excluded = {*METADATA_COLUMNS, "UMAP1", "UMAP2"}
+        features = [
+            column
+            for column in data.select_dtypes(include=[np.number]).columns
+            if column not in excluded
+        ]
+    matrix = data[list(features)].to_numpy(dtype=np.float32)
     values = np.asarray(labels, dtype=int)
     if len(matrix) != len(values):
         raise ValueError("Label count must match expression row count")
-    noise_mask, train_mask = values == -1, values != -1
+    train_mask = values != -1
     clusters = np.unique(values[train_mask])
     if len(clusters) == 0:
         raise ValueError("No manually labeled cells remain for XGBoost training")
-    final_labels, model = values.copy(), None
-    if noise_mask.any():
-        if len(clusters) == 1:
-            final_labels[noise_mask] = clusters[0]
-        else:
-            final_labels[noise_mask], model = _fit_xgboost(
-                matrix,
-                values,
-                train_mask,
-                noise_mask,
-                n_estimators,
-                max_depth,
-                learning_rate,
-                random_state,
-                n_jobs,
-                len(clusters),
-            )
-    return final_labels, model
+    if len(clusters) == 1:
+        return np.full(len(values), clusters[0], dtype=int), None, None
 
-
-def _fit_xgboost(
-    matrix: np.ndarray,
-    labels: np.ndarray,
-    train_mask: np.ndarray,
-    noise_mask: np.ndarray,
-    n_estimators: int,
-    max_depth: int,
-    learning_rate: float,
-    random_state: int,
-    n_jobs: int,
-    class_count: int,
-) -> tuple[np.ndarray, XGBClassifier]:
-    """Fit an encoded classifier and predict labels for unassigned rows.
-
-    Args:
-        matrix: Cell-by-feature values used for training and prediction.
-        labels: Existing numeric labels aligned with ``matrix``.
-        train_mask: Rows used to fit the classifier.
-        noise_mask: Unassigned rows whose labels should be predicted.
-        n_estimators: Number of boosting rounds.
-        max_depth: Maximum tree depth.
-        learning_rate: Boosting learning rate.
-        random_state: Seed for classifier training.
-        n_jobs: Number of parallel workers.
-        class_count: Number of distinct training classes.
-
-    Returns:
-        Predicted numeric labels for the unassigned rows and the fitted model.
-    """
-    encoder = LabelEncoder()
-    y_train = encoder.fit_transform(labels[train_mask])
-    model = XGBClassifier(
+    probabilities, class_labels, model = fit_xgboost_probabilities(
+        matrix[train_mask],
+        values[train_mask],
+        matrix,
         n_estimators=n_estimators,
         max_depth=max_depth,
         learning_rate=learning_rate,
-        objective="binary:logistic" if class_count == 2 else "multi:softprob",
-        eval_metric="logloss" if class_count == 2 else "mlogloss",
-        subsample=0.8,
-        colsample_bytree=1.0,
-        tree_method="hist",
         random_state=random_state,
         n_jobs=n_jobs,
-        verbosity=0,
     )
-    model.fit(matrix[train_mask], y_train)
-    probabilities = model.predict_proba(matrix[noise_mask])
-    predicted = encoder.inverse_transform(probabilities.argmax(axis=1))
-    return predicted, model
+    predicted_labels = class_labels[probabilities.argmax(axis=1)]
+    return predicted_labels, probabilities, model
 
 
 def assign_biological_labels(labels: np.ndarray) -> list[str | int]:
@@ -154,8 +113,7 @@ def save_labeled_data(
     """Attach labels to expression rows after checking cell identity and order.
 
     Args:
-        expression: Expression table containing unique ``cell_id`` and
-            ``cell_uid`` columns.
+        expression: Expression table containing unique ``cell_uid`` values.
         coordinates: Coordinate table with matching cell identifiers and order.
         labels: Numeric labels aligned with both input tables.
         output_file: Destination CSV path.
@@ -168,16 +126,15 @@ def save_labeled_data(
     """
     if len(expression) != len(coordinates):
         raise ValueError("Expression and coordinate tables have different row counts")
-    if "cell_id" not in expression or "cell_id" not in coordinates:
-        raise ValueError("Both tables must contain cell_id")
     if "cell_uid" not in expression or "cell_uid" not in coordinates:
         raise ValueError("Both tables must contain cell_uid")
-    if (
-        not expression["cell_id"]
-        .reset_index(drop=True)
-        .equals(coordinates["cell_id"].reset_index(drop=True))
-    ):
-        raise ValueError("Expression and UMAP cell_id values/order do not match")
+    if "cell_id" in expression and "cell_id" in coordinates:
+        if (
+            not expression["cell_id"]
+            .reset_index(drop=True)
+            .equals(coordinates["cell_id"].reset_index(drop=True))
+        ):
+            raise ValueError("Expression and UMAP cell_id values/order do not match")
     if (
         bool(expression["cell_uid"].isna().any())
         or bool(coordinates["cell_uid"].isna().any())

@@ -11,12 +11,12 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from app.harmonization.balancing import process_balancing_files
-from app.harmonization.batch_correction import MARKER_COLS, batch_correct
-from app.harmonization.scaling import (
+from app.preprocessing.balancing import process_balancing_files
+from app.config.config import METADATA_COLUMNS
+from app.preprocessing.batch_correction import apply_fitted_batch_correction
+from app.preprocessing.scaling import (
     combine_scaled_experiments,
     process_scaling_files,
-    zscore_markers,
 )
 
 
@@ -55,15 +55,6 @@ class HarmonizationReferenceTests(unittest.TestCase):
                 expected = pd.read_csv(BALANCED / f"{experiment}_GFP_high_BALANCED.csv")
                 assert_frames_match(self, actual[experiment], expected)
 
-    def test_zscore_reference_balanced_table_matches_saved_values(self) -> None:
-        source = pd.read_csv(BALANCED / "batch2_GFP_high_BALANCED.csv")
-        actual, valid, skipped, zero_variance = zscore_markers(source)
-        expected = pd.read_csv(ZSCORED / "batch2_GFP_high_BALANCED_ZSCORED.csv")
-        self.assertTrue(valid)
-        self.assertEqual(skipped, ["H2A"])
-        assert_frames_match(self, actual, expected)
-        self.assertEqual(zero_variance, [])
-
     def test_scaling_and_pooling_file_workflows_match_reference_tables(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / "zscored"
@@ -96,9 +87,11 @@ class HarmonizationReferenceTests(unittest.TestCase):
         )
         source = pd.read_csv(arcsinh).iloc[:8].copy()
         expected = pd.read_csv(corrected).iloc[:8].copy()
-        markers = [column for column in MARKER_COLS if column in source and column in expected]
+        markers = [
+            column for column in source if column in expected and column not in METADATA_COLUMNS
+        ]
         invalid = [column for column in source if column not in expected]
-        actual = batch_correct(source, markers, "batch2", IdentityModel(), invalid)
+        actual = apply_fitted_batch_correction(source, markers, "batch2", IdentityModel(), invalid)
         self.assertEqual(actual.columns.tolist(), expected.columns.tolist())
         pd.testing.assert_frame_equal(actual, expected, check_dtype=False, rtol=1e-7, atol=1e-7)
 

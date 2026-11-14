@@ -43,16 +43,24 @@ def add_cell_uid(data: pd.DataFrame) -> pd.DataFrame:
     """Add or validate stable cell identifiers from source metadata.
 
     Args:
-        data: Table containing ``experiment``, ``source_file``, and
-            ``raw_row_id`` columns.
+        data: Table with source fields when ``cell_uid`` is absent, or with
+            existing cell UIDs to validate.
 
     Returns:
         A copy of the table with a unique ``cell_uid`` column.
 
     Raises:
-        ValueError: If source identifiers are missing, null, inconsistent, or
-            do not produce unique cell UIDs.
+        ValueError: If required source fields are missing, identifiers contain
+            nulls, existing UIDs disagree with source fields, or UIDs are not
+            unique.
     """
+    if CELL_UID_COLUMN in data:
+        if data[CELL_UID_COLUMN].isna().to_numpy().any() or not data[CELL_UID_COLUMN].is_unique:
+            raise ValueError("Existing cell_uid values must be non-null and unique")
+        required_source_columns = {"experiment", "source_file", "raw_row_id"}
+        if not required_source_columns.issubset(data.columns):
+            return data.copy()
+
     required = {"experiment", "source_file", "raw_row_id"}
     missing = required.difference(data.columns)
     if missing:
@@ -177,14 +185,11 @@ def attach_annotation_labels(data: pd.DataFrame, annotation_file: Path) -> pd.Da
     input_uids = result[CELL_UID_COLUMN].astype("string")
     matched_rows = annotation_rows.reindex(input_uids)
 
-    # Replace prior annotation columns and mark which input rows found a match.
-    result = result.drop(
-        columns=["labels", "leiden_cluster", "annotation_present"], errors="ignore"
-    )
+    # Replace prior annotation columns before adding the aligned values.
+    result = result.drop(columns=["labels", "leiden_cluster"], errors="ignore")
     result["labels"] = pd.array(matched_rows["labels"].to_numpy(), dtype="string")
     result["leiden_cluster"] = pd.array(matched_rows["leiden_cluster"].to_numpy(), dtype="Int64")
-    result["annotation_present"] = result["labels"].notna()
-    print(len(result[result["annotation_present"]]))
+    print(result["labels"].notna().sum())
     return result
 
 
@@ -217,6 +222,13 @@ def load_raw_data(
         csv_files = sorted(experiment_dir.rglob("*_raw_data.csv"))
         for csv_file in csv_files:
             df_file = pd.read_csv(csv_file, low_memory=False)
+            if "experiment" not in df_file:
+                df_file["experiment"] = experiment
+            else:
+                df_file["experiment"] = df_file["experiment"].where(
+                    df_file["experiment"].notna(), experiment
+                )
+            df_file = df_file.drop(columns="batch", errors="ignore")
             all_experiment_dfs.append(df_file)
     if not all_experiment_dfs:
         raise ValueError(f"No '_raw_data.csv' files found inside {input_dir}")

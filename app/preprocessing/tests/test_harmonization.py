@@ -3,12 +3,13 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
-from app.harmonization.balancing import balance_samples
-from app.harmonization.scaling import (
+from app.preprocessing.balancing import balance_samples
+from app.preprocessing.scaling import (
     combine_scaled_experiments,
     process_scaling_files,
     zscore_markers,
@@ -18,7 +19,7 @@ from app.harmonization.scaling import (
 class HarmonizationTests(unittest.TestCase):
     """Verify the source notebook's sample ordering and numerical rules."""
 
-    def test_balance_uses_sorted_samples_seed_offsets_and_batch2_exclusion(self) -> None:
+    def test_balance_uses_sorted_samples_seed_offsets_and_keeps_batch2_sample(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             high_dir = root / "normalized" / "batch3" / "GFP_high"
@@ -33,51 +34,53 @@ class HarmonizationTests(unittest.TestCase):
             pd.DataFrame(
                 {"cell_id": ["b0", "b1"], "sample_name": ["b"] * 2, "condition": ["untreated"] * 2}
             ).to_csv(high_dir / "b_NORMALIZED.csv", index=False)
-            skip_dir = root / "normalized" / "batch2" / "GFP_high"
-            skip_dir.mkdir(parents=True)
+            batch2_dir = root / "normalized" / "batch2" / "GFP_high"
+            batch2_dir.mkdir(parents=True)
             pd.DataFrame(
-                {"cell_id": ["skip"], "sample_name": ["1484"], "condition": ["treated"]}
-            ).to_csv(skip_dir / "1484_NORMALIZED.csv", index=False)
+                {"cell_id": ["cell1484"], "sample_name": ["1484"], "condition": ["treated"]}
+            ).to_csv(batch2_dir / "1484_NORMALIZED.csv", index=False)
 
-            balanced, counts, summary = balance_samples(
-                root / "normalized", root / "balanced", ["batch2", "batch3"]
-            )
+            with patch(
+                "app.preprocessing.balancing.dotenv_values",
+                return_value={"RANDOM_STATE": "42"},
+            ):
+                balanced, counts, summary = balance_samples(
+                    root / "normalized", root / "balanced", ["batch2", "batch3"]
+                )
 
             self.assertEqual(balanced["batch3"]["cell_id"].value_counts().sum(), 4)
             self.assertEqual(balanced["batch3"]["cell_id"].tolist()[2:], ["b1", "b0"])
-            self.assertTrue(counts.loc[counts["experiment"] == "batch2", "skipped"].iloc[0])
-            self.assertEqual(summary["n_after_balancing"].tolist(), [2, 2])
+            self.assertEqual(balanced["batch2"]["cell_id"].tolist(), ["cell1484"])
+            self.assertEqual(
+                counts.loc[counts["experiment"] == "batch2", "sample_name"].tolist(), ["1484"]
+            )
+            self.assertEqual(summary["n_after_balancing"].tolist(), [1, 2, 2])
 
-    def test_zscore_matches_population_standard_deviation_and_keeps_metadata(self) -> None:
+    def test_zscore_uses_all_rows_without_group_specific_metadata(self) -> None:
         frame = pd.DataFrame(
             {
-                "cell_id": ["a", "b", "c"],
-                "CD109": [1.0, 2.0, 3.0],
-                "H4": [7.0, 7.0, 7.0],
-                "DNA": ["x", "x", "x"],
-                "not_a_marker": [2.0, 4.0, 6.0],
-                "labels": ["basal", "classical", "basal"],
-                "leiden_cluster": pd.array([1, 2, 1], dtype="Int64"),
-                "annotation_present": [True, True, True],
+                "cell_id": ["a", "b", "c", "d"],
+                "gfp_group": ["GFP_high", "GFP_high", "GFP_low", "GFP_low"],
+                "marker": [1.0, 2.0, 10.0, 13.0],
+                "constant": [7.0, 7.0, 7.0, 7.0],
+                "labels": ["basal", "classical", "basal", "classical"],
             }
         )
 
-        scaled, valid, skipped, constant = zscore_markers(
-            frame,
-            all_markers=["CD109", "H4", "DNA", "labels", "leiden_cluster", "annotation_present"],
+        scaled, scaled_columns = zscore_markers(
+            frame, skip_columns=["cell_id", "gfp_group", "labels"]
         )
 
-        np.testing.assert_allclose(scaled["CD109"], [-np.sqrt(1.5), 0, np.sqrt(1.5)])
-        self.assertEqual(scaled["H4"].tolist(), [0, 0, 0])
-        self.assertEqual(scaled["cell_id"].tolist(), ["a", "b", "c"])
-        self.assertEqual(valid, ["CD109", "H4"])
-        self.assertEqual(skipped, ["DNA"])
-        self.assertEqual(constant, ["H4"])
-        self.assertEqual(scaled["labels"].tolist(), frame["labels"].tolist())
-        self.assertEqual(scaled["leiden_cluster"].tolist(), frame["leiden_cluster"].tolist())
-        self.assertEqual(
-            scaled["annotation_present"].tolist(), frame["annotation_present"].tolist()
+        self.assertEqual(scaled_columns, ["marker", "constant"])
+        np.testing.assert_allclose(
+            scaled["marker"],
+            (frame["marker"] - frame["marker"].mean()) / frame["marker"].std(ddof=0),
         )
+        self.assertEqual(scaled["constant"].tolist(), [0.0] * len(frame))
+        pd.testing.assert_frame_equal(
+            scaled[["cell_id", "gfp_group", "labels"]], frame[["cell_id", "gfp_group", "labels"]]
+        )
+        self.assertEqual(scaled.shape, frame.shape)
 
     def test_combine_preserves_experiment_order_and_saves_index_free_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

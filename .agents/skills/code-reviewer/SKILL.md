@@ -30,7 +30,7 @@ When reviewing code, always cover these areas in order:
 
 ## 4. Module-Specific Consistency
 
-- If the change touches a `scbatch` member, verify its AnnData mutation
+- If the change touches an `app` module, verify its AnnData mutation
   contract, public namespace export, and component-local tests are updated in
   sync.
 - Check that anything the AGENTS.md flags as "must be registered" (added

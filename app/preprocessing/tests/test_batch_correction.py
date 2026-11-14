@@ -3,11 +3,13 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
-from app.harmonization.batch_correction import (
+from app.preprocessing.batch_correction import (
+    apply_fitted_batch_correction,
     batch_correct,
     fit_batch_correction,
     process_batch_correction_files,
@@ -18,7 +20,11 @@ from app.harmonization.batch_correction import (
 class IdentityCorrectionModel:
     """Minimal transform double for testing the copied notebook function."""
 
+    def __init__(self) -> None:
+        self.transform_calls = 0
+
     def transform(self, values: np.ndarray, batch_labels: np.ndarray) -> np.ndarray:
+        self.transform_calls += 1
         self.batch_labels = batch_labels
         return values.copy()
 
@@ -41,7 +47,9 @@ class BatchCorrectionTests(unittest.TestCase):
         self.model = IdentityCorrectionModel()
 
     def test_identity_model_round_trip_preserves_values_and_metadata(self) -> None:
-        corrected = batch_correct(self.frame, ["marker"], "batch2", self.model, ["invalid"])
+        corrected = apply_fitted_batch_correction(
+            self.frame, ["marker"], "batch2", self.model, ["invalid"]
+        )
 
         np.testing.assert_allclose(corrected["marker"], self.frame["marker"])
         self.assertEqual(corrected["cell_id"].tolist(), ["a", "b"])
@@ -55,7 +63,7 @@ class BatchCorrectionTests(unittest.TestCase):
             annotation_present=[True, False],
         )
 
-        corrected = batch_correct(
+        corrected = apply_fitted_batch_correction(
             data,
             ["marker", "leiden_cluster", "annotation_present"],
             "batch2",
@@ -74,8 +82,8 @@ class BatchCorrectionTests(unittest.TestCase):
         data = self.frame.copy()
         data.loc[0, "marker"] = np.inf
 
-        with self.assertRaisesRegex(ValueError, "Invalid input values for batch batch2"):
-            batch_correct(data, ["marker"], "batch2", self.model)
+        with self.assertRaisesRegex(ValueError, "Invalid input values for batch2"):
+            apply_fitted_batch_correction(data, ["marker"], "batch2", self.model)
 
     def test_nonfinite_model_output_is_rejected(self) -> None:
         class InvalidModel:
@@ -83,7 +91,56 @@ class BatchCorrectionTests(unittest.TestCase):
                 return np.full_like(values, np.nan)
 
         with self.assertRaisesRegex(ValueError, "Batch correction produced NaN or Inf"):
-            batch_correct(self.frame, ["marker"], "batch2", InvalidModel())
+            apply_fitted_batch_correction(self.frame, ["marker"], "batch2", InvalidModel())
+
+    def test_pooled_batch_correction_fits_once_and_returns_shared_markers_and_metadata(
+        self,
+    ) -> None:
+        pooled = pd.DataFrame(
+            {
+                "cell_id": ["a", "b", "c", "d"],
+                "experiment": ["batch2", "batch2", "batch3", "batch3"],
+                "condition": ["treated", "untreated", "treated", "untreated"],
+                "sample_name": ["m1", "m1", "m2", "m2"],
+                "source_file": ["a.csv", "a.csv", "b.csv", "b.csv"],
+                "CD109": np.arcsinh(np.array([5.0, 10.0, 15.0, 20.0]) / 5),
+                "unrecognized": [1.0, 2.0, 3.0, 4.0],
+            }
+        )
+        model = IdentityCorrectionModel()
+        factory_calls = []
+
+        def factory(**arguments: object) -> IdentityCorrectionModel:
+            factory_calls.append(arguments)
+            return model
+
+        metadata = ["cell_id", "experiment", "condition", "sample_name", "source_file"]
+        corrected, corrected_columns = batch_correct(
+            pooled, skip_columns=metadata, model_factory=factory
+        )
+
+        self.assertEqual(len(factory_calls), 1)
+        self.assertEqual(model.transform_calls, 1)
+        self.assertEqual(model.fit_batch_labels.tolist(), ["batch2", "batch2", "batch3", "batch3"])
+        self.assertEqual(model.batch_labels.tolist(), ["batch2", "batch2", "batch3", "batch3"])
+        self.assertEqual(corrected.columns.tolist(), metadata + ["CD109", "unrecognized"])
+        self.assertEqual(corrected_columns, ["CD109", "unrecognized"])
+        self.assertEqual(corrected["cell_id"].tolist(), pooled["cell_id"].tolist())
+        np.testing.assert_allclose(corrected["CD109"], pooled["CD109"])
+        np.testing.assert_allclose(corrected["unrecognized"], pooled["unrecognized"])
+
+    def test_pooled_batch_correction_requires_source_provenance(self) -> None:
+        pooled = pd.DataFrame(
+            {
+                "cell_id": ["a"],
+                "experiment": ["batch2"],
+                "condition": ["treated"],
+                "CD109": [1.0],
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "per-source file metadata"):
+            batch_correct(pooled, skip_columns=["cell_id", "experiment", "condition"])
 
     def test_marker_selection_drops_nonfinite_markers_but_keeps_source_order(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -121,9 +178,13 @@ class BatchCorrectionTests(unittest.TestCase):
                 captured.update(arguments)
                 return model
 
-            fitted, markers, invalid, valid, fit_subset = fit_batch_correction(
-                root, ["batch2", "batch3"], ["M"], ["M"], factory
-            )
+            with patch(
+                "app.preprocessing.batch_correction.dotenv_values",
+                return_value={"RANDOM_STATE": "42"},
+            ):
+                fitted, markers, invalid, valid, fit_subset = fit_batch_correction(
+                    root, ["batch2", "batch3"], ["M"], ["M"], factory
+                )
 
             self.assertIs(fitted, model)
             self.assertEqual(markers, ["M"])

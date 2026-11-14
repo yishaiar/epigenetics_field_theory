@@ -8,10 +8,10 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from app.preprocessing.filtering import save_gfp_split, split_cells_by_gfp
-from app.preprocessing.gating import process_gated_files
-from app.preprocessing.loading import load_raw_data
-from app.preprocessing.transformation import process_arcsinh_files
+from app.cell_selection.filtering import save_gfp_split, split_cells_by_gfp
+from app.cell_selection.gating import process_gated_files
+from app.cell_selection.loading import load_raw_data
+from app.cell_selection.transformation import process_arcsinh_files
 
 
 @pytest.mark.slow

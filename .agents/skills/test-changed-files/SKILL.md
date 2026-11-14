@@ -30,11 +30,11 @@ git diff --name-only --cached
 
 For each changed `.py` file, find its corresponding test:
 
-- `scbatch/<member>/<module>.py` →
-  `scbatch/<member>/tests/test_<module>.py`
+- `app/<module>/<module>.py` →
+  `app/<module>/tests/test_<module>.py`
 
 If a changed file has no test, skip it — don't run unrelated tests. Determine
-the owning member from the directory directly under `scbatch/`.
+the owning module from the directory directly under `app/`.
 
 ## Step 3 — Run only the relevant tests
 
@@ -44,7 +44,7 @@ Run each test file individually:
 uv run pytest <path/to/test_file.py> -v
 ```
 
-- Never run the whole suite unless explicitly asked; run the owning member's test directory instead.
+- Never run the whole suite unless explicitly asked; run the owning module's test directory instead.
 - After implementation changes, run the mapped tests immediately without waiting for a separate request.
 - Run each selected pytest command in a `gpt-6-luna` subagent.
 - Report every run in the main conversation:

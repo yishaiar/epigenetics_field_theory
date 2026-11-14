@@ -8,55 +8,14 @@ from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd
+from dotenv import dotenv_values
 from numpy.typing import NDArray
 
-from app.harmonization.marker_lists import (
-    CELL_IDENTITY_MARKERS,
-    EPIGENETIC_MARKERS,
-)
-from app.metadata import METADATA_EXCLUSION_COLUMNS
+from app.config import env_dir
+from app.config.config import METADATA_COLUMNS
 
-MARKER_COLS = [
-    "CD109",
-    "CD24",
-    "CD44",
-    "CD45",
-    "CXCR4",
-    "E-cadherin",
-    "EZH2",
-    "EpCAM",
-    "GAL4",
-    "GATA6",
-    "GFP",
-    "H2AK119ub",
-    "H3",
-    "H3.3",
-    "H3K27ac",
-    "H3K27me3",
-    "H3K36me2",
-    "H3K36me3",
-    "H3K4me1",
-    "H3K4me2",
-    "H3K4me3",
-    "H3K9ac",
-    "H3K9me2",
-    "H3K9me3",
-    "H4",
-    "H4K16ac",
-    "H4K20me3",
-    "KI67",
-    "KRT17",
-    "KRT5",
-    "MBD",
-    "MHC-II",
-    "Pan-KRT",
-    "S100A4",
-    "TSPAN8",
-    "Vimentin",
-    "pH2A.X",
-    "pRb",
-]
-ALL_MARKER_COLS = list(dict.fromkeys(MARKER_COLS + CELL_IDENTITY_MARKERS + EPIGENETIC_MARKERS))
+_INTERNAL_METADATA_COLUMNS = {"_batch", "_arcsinh_file", "_source_file"}
+_BATCH_CORRECTION_EXCLUDED_COLUMNS = set(METADATA_COLUMNS) | _INTERNAL_METADATA_COLUMNS
 
 
 class BatchCorrectionModel(Protocol):
@@ -95,58 +54,110 @@ class FittableBatchCorrectionModel(BatchCorrectionModel, Protocol):
 
 def batch_correct(
     df: pd.DataFrame,
+    skip_columns: list[str],
+    model_factory: Callable[..., FittableBatchCorrectionModel] | None = None,
+) -> tuple[pd.DataFrame, list[str]]:
+    """Fit SOM-OT on pooled rows and correct every shared marker once.
+
+    Args:
+        df: Pooled ArcSinh table with experiment, condition, and source metadata.
+        skip_columns: Metadata columns to preserve without correction.
+        model_factory: Optional SOM-OT factory, primarily for controlled runs.
+
+    Returns:
+        The corrected pooled dataframe and marker columns corrected by SOM-OT.
+
+    Raises:
+        ValueError: If required metadata or shared finite markers are unavailable.
+    """
+    source_column = next(
+        (
+            column
+            for column in ("path", "_arcsinh_file", "_source_file", "source_file")
+            if column in df.columns
+        ),
+        None,
+    )
+    source_group_columns = (
+        [source_column] if source_column is not None else ["experiment", "sample_name", "gfp_group"]
+    )
+    required = {"experiment", "condition", *source_group_columns}
+    missing = sorted(required.difference(df.columns))
+    if missing:
+        raise ValueError(f"Pooled arcsinh data is missing required columns: {missing}")
+    required_metadata = list(dict.fromkeys(["experiment", "condition", *source_group_columns]))
+    if df[required_metadata].isna().to_numpy().any():
+        raise ValueError("Pooled arcsinh data has missing fit or source metadata")
+
+    experiments = list(dict.fromkeys(df["experiment"].astype(str)))
+    model, markers, _, _, _ = fit_batch_correction_data(
+        df,
+        experiments,
+        model_factory=model_factory,
+        skip_columns=skip_columns,
+    )
+    corrected = apply_fitted_batch_correction(
+        df,
+        markers,
+        df["experiment"].to_numpy(),
+        model,
+    )
+    output_columns = [
+        column for column in df.columns if column in skip_columns or column in markers
+    ]
+    corrected_columns = [column for column in output_columns if column not in skip_columns]
+    return corrected.loc[:, output_columns], corrected_columns
+
+
+def apply_fitted_batch_correction(
+    df: pd.DataFrame,
     marker_cols_: list[str],
-    batch_label: str,
+    batch_label: str | np.ndarray,
     model: BatchCorrectionModel,
     invalid_markers: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Correct selected marker columns for one batch.
-
-    Marker values are converted from arcsinh scale to raw scale before calling
-    the model, then converted back afterward.
-
-    Args:
-        df: Input table containing the selected marker columns.
-        marker_cols_: Marker columns to transform and correct.
-        batch_label: Batch identifier passed to the correction model.
-        model: Fitted model implementing :class:`BatchCorrectionModel`.
-        invalid_markers: Optional nonmetadata columns to remove from the output.
-
-    Returns:
-        A corrected copy of ``df``.
-
-    Raises:
-        ValueError: If no marker columns remain or input/model output contains
-            nonfinite values.
-    """
+    """Apply a fitted SOM-OT model to one table using its batch labels."""
     df_corrected = df.copy()
     invalid_markers = [] if invalid_markers is None else invalid_markers
     invalid_markers = [
-        column for column in invalid_markers if column not in METADATA_EXCLUSION_COLUMNS
+        column for column in invalid_markers if column not in _BATCH_CORRECTION_EXCLUDED_COLUMNS
     ]
     df_corrected.drop(columns=invalid_markers, inplace=True, errors="ignore")
-    marker_cols_ = [column for column in marker_cols_ if column not in METADATA_EXCLUSION_COLUMNS]
+    marker_cols_ = [
+        column for column in marker_cols_ if column not in _BATCH_CORRECTION_EXCLUDED_COLUMNS
+    ]
     if not marker_cols_:
         raise ValueError("No marker columns remain after excluding metadata")
     X = _reverse_arcsinh(df_corrected, marker_cols_)
+    if isinstance(batch_label, str):
+        batch_labels = np.full(len(df_corrected), batch_label)
+        batch_name = batch_label
+    else:
+        batch_labels = np.asarray(batch_label)
+        if batch_labels.shape != (len(df_corrected),):
+            raise ValueError("batch_label must contain one label per dataframe row")
+        batch_name = "pooled data"
     if not np.isfinite(X).all():
-        raise ValueError(f"Invalid input values for batch {batch_label}")
-    X_corrected = model.transform(X, np.full(len(df_corrected), batch_label))
+        raise ValueError(f"Invalid input values for {batch_name}")
+    X_corrected = model.transform(X, batch_labels)
     if not np.isfinite(X_corrected).all():
-        raise ValueError(f"Batch correction produced NaN or Inf for {batch_label}")
+        raise ValueError(f"Batch correction produced NaN or Inf for {batch_name}")
     df_corrected[marker_cols_] = np.arcsinh(X_corrected / 5)
     return df_corrected
 
 
 def select_correction_markers(
-    files: list[Path], marker_cols: list[str], all_marker_cols: list[str]
+    files: list[Path],
+    marker_cols: list[str] | None = None,
+    all_marker_cols: list[str] | None = None,
 ) -> tuple[list[str], list[str], list[str]]:
     """Select markers shared by all files and finite in every file.
 
     Args:
         files: Input CSV paths to inspect.
-        marker_cols: Preferred marker order for the selected marker list.
-        all_marker_cols: Full set of candidate biological markers.
+        marker_cols: Optional preferred marker order. By default, all shared
+            nonmetadata columns are candidates.
+        all_marker_cols: Optional candidate restriction for specialized callers.
 
     Returns:
         Selected markers in ``marker_cols`` order, invalid candidate markers,
@@ -158,10 +169,14 @@ def select_correction_markers(
     """
     if not files:
         raise FileNotFoundError("No files found for batch correction")
-    shared_markers = set(all_marker_cols)
+    file_columns = [pd.read_csv(file, nrows=0).columns.tolist() for file in files]
+    shared_markers = set(file_columns[0])
     for file in files:
         shared_markers &= set(pd.read_csv(file, nrows=0).columns)
-    valid_markers = set(shared_markers).difference(METADATA_EXCLUSION_COLUMNS)
+    candidates = shared_markers.difference(_BATCH_CORRECTION_EXCLUDED_COLUMNS)
+    if all_marker_cols is not None:
+        candidates.intersection_update(all_marker_cols)
+    valid_markers = set(candidates)
     for file in files:
         if not valid_markers:
             break
@@ -173,8 +188,13 @@ def select_correction_markers(
             values = numeric.to_numpy(dtype=float)
             if not np.isfinite(values).all():
                 valid_markers.remove(marker)
-    invalid_markers = sorted(set(all_marker_cols) - valid_markers - set(METADATA_EXCLUSION_COLUMNS))
-    selected_markers = [marker for marker in marker_cols if marker in valid_markers]
+    all_candidates = set().union(*(set(columns) for columns in file_columns))
+    all_candidates.difference_update(_BATCH_CORRECTION_EXCLUDED_COLUMNS)
+    if all_marker_cols is not None:
+        all_candidates.update(all_marker_cols)
+    invalid_markers = sorted(all_candidates - valid_markers)
+    preferred_order = marker_cols if marker_cols is not None else file_columns[0]
+    selected_markers = [marker for marker in preferred_order if marker in valid_markers]
     if not selected_markers:
         raise ValueError("No valid markers remain for batch correction")
     return selected_markers, invalid_markers, sorted(valid_markers)
@@ -183,8 +203,8 @@ def select_correction_markers(
 def fit_batch_correction(
     arcsinh_dir: Path,
     experiments: list[str],
-    marker_cols: list[str] = MARKER_COLS,
-    all_marker_cols: list[str] = ALL_MARKER_COLS,
+    marker_cols: list[str] | None = None,
+    all_marker_cols: list[str] | None = None,
     model_factory: Callable[..., FittableBatchCorrectionModel] | None = None,
 ) -> tuple[FittableBatchCorrectionModel, list[str], list[str], list[str], pd.DataFrame]:
     """Fit the SOM-OT model from sampled arcsinh files across experiments.
@@ -234,12 +254,25 @@ def fit_batch_correction(
 def fit_batch_correction_data(
     data: pd.DataFrame,
     experiments: list[str],
-    marker_cols: list[str] = MARKER_COLS,
-    all_marker_cols: list[str] = ALL_MARKER_COLS,
     model_factory: Callable[..., FittableBatchCorrectionModel] | None = None,
+    skip_columns: list[str] | None = None,
+    marker_cols: list[str] | None = None,
+    all_marker_cols: list[str] | None = None,
 ) -> tuple[FittableBatchCorrectionModel, list[str], list[str], list[str], pd.DataFrame]:
     """Fit SOM-OT using the arcsinh table already loaded by the notebook."""
-    required = {"experiment", "condition", "_arcsinh_file"}
+    source_column = next(
+        (
+            column
+            for column in ("path", "_arcsinh_file", "_source_file", "source_file")
+            if column in data.columns
+        ),
+        None,
+    )
+    source_group_columns = (
+        [source_column] if source_column is not None else ["experiment", "sample_name", "gfp_group"]
+    )
+    required = {"experiment", "condition"}
+    required.update(source_group_columns)
     missing = sorted(required.difference(data.columns))
     if missing:
         raise ValueError(f"Loaded arcsinh data is missing required columns: {missing}")
@@ -247,21 +280,24 @@ def fit_batch_correction_data(
     if selected_data.empty:
         raise ValueError("No loaded arcsinh rows match the requested experiments")
     selected_data["_batch"] = selected_data["experiment"]
-    candidates = [
-        marker
-        for marker in all_marker_cols
-        if marker in selected_data.columns and marker not in METADATA_EXCLUSION_COLUMNS
-    ]
+    excluded_columns = set(_BATCH_CORRECTION_EXCLUDED_COLUMNS)
+    if skip_columns is not None:
+        excluded_columns.update(skip_columns)
+    candidates = [column for column in selected_data.columns if column not in excluded_columns]
+    if all_marker_cols is not None:
+        candidates = [column for column in candidates if column in all_marker_cols]
     valid_markers = set(candidates)
-    for _, file_data in selected_data.groupby("_arcsinh_file", sort=False):
+    groupby_columns: str | list[str] = (
+        source_group_columns[0] if len(source_group_columns) == 1 else source_group_columns
+    )
+    for _, file_data in selected_data.groupby(groupby_columns, sort=False):
         for marker in list(valid_markers):
             values = np.asarray(pd.to_numeric(file_data[marker], errors="coerce"), dtype=float)
             if not np.isfinite(values).all():
                 valid_markers.remove(marker)
-    invalid_markers = sorted(
-        set(all_marker_cols).difference(valid_markers).difference(METADATA_EXCLUSION_COLUMNS)
-    )
-    correction_markers = [marker for marker in marker_cols if marker in valid_markers]
+    invalid_markers = [marker for marker in candidates if marker not in valid_markers]
+    preferred_order = candidates if marker_cols is None else marker_cols
+    correction_markers = [marker for marker in preferred_order if marker in valid_markers]
     if not correction_markers:
         raise ValueError("No valid markers remain for batch correction")
     fit_subset = _sample_fit_cells(selected_data)
@@ -283,6 +319,61 @@ def fit_batch_correction_data(
         raise ValueError("X_fit contains NaN or Inf values")
     model.fit(values, fit_subset["_batch"].to_numpy())
     return model, correction_markers, invalid_markers, sorted(valid_markers), fit_subset
+
+
+def process_batch_correction(
+    arcsinh_dir: Path,
+    output_dir: Path,
+    experiments: list[str],
+    model_factory: Callable[..., FittableBatchCorrectionModel] | None = None,
+) -> tuple[
+    FittableBatchCorrectionModel,
+    list[str],
+    list[str],
+    list[str],
+    pd.DataFrame,
+    pd.DataFrame,
+]:
+    """Load arcsinh files, fit SOM-OT on their combined rows, and export corrections.
+
+    The concatenated dataframe and its per-file provenance columns are internal
+    to this workflow. Corrected outputs remain separate and preserve their
+    source-relative paths.
+
+    Args:
+        arcsinh_dir: Root containing experiment-specific arcsinh CSV files.
+        output_dir: Destination root for per-source-file corrected CSVs.
+        experiments: Experiment folder names included in the correction.
+        model_factory: Optional constructor for a compatible SOM-OT model.
+
+    Returns:
+        The fitted model, selected markers, invalid markers, all valid markers,
+        fit subset, and per-file correction summary.
+    """
+    files = _collect_arcsinh_files(arcsinh_dir, experiments)
+    frames = []
+    for source in files:
+        relative = source.relative_to(arcsinh_dir)
+        frame = pd.read_csv(source, low_memory=False)
+        frame["_batch"] = relative.parts[0]
+        frame["_arcsinh_file"] = relative.as_posix()
+        frames.append(frame)
+    arcsinh_data = pd.concat(frames, ignore_index=True)
+
+    model, markers, invalid, valid, fit_subset = fit_batch_correction_data(
+        arcsinh_data,
+        experiments,
+        model_factory=model_factory,
+    )
+    summary = process_batch_correction_data(
+        arcsinh_data,
+        arcsinh_dir,
+        output_dir,
+        model,
+        markers,
+        invalid,
+    )
+    return model, markers, invalid, valid, fit_subset, summary
 
 
 def _collect_arcsinh_files(arcsinh_dir: Path, experiments: list[str]) -> list[Path]:
@@ -336,9 +427,13 @@ def _sample_fit_cells(data: pd.DataFrame) -> pd.DataFrame:
         A sampled copy containing at most 10,000 rows from each batch-condition
         group, selected after a reproducible shuffle.
     """
+    seed_value = dotenv_values(env_dir).get("RANDOM_STATE")
+    if seed_value is None:
+        raise ValueError(f"RANDOM_STATE is missing from {env_dir}")
+    random_state = int(seed_value)
     subset = (
         data.groupby(["_batch", "condition"], group_keys=False)
-        .sample(frac=1, random_state=42)
+        .sample(frac=1, random_state=random_state)
         .groupby(["_batch", "condition"], group_keys=False)
         .head(10000)
     )
@@ -372,7 +467,7 @@ def process_batch_correction_files(
     model: BatchCorrectionModel,
     marker_cols: list[str],
     invalid_markers: list[str],
-    all_marker_cols: list[str] = ALL_MARKER_COLS,
+    all_marker_cols: list[str] | None = None,
 ) -> pd.DataFrame:
     """Correct each requested experiment's files and write a summary.
 
@@ -407,7 +502,7 @@ def process_batch_correction_data(
     model: BatchCorrectionModel,
     marker_cols: list[str],
     invalid_markers: list[str],
-    all_marker_cols: list[str] = ALL_MARKER_COLS,
+    all_marker_cols: list[str] | None = None,
 ) -> pd.DataFrame:
     """Correct and export rows from the notebook's loaded arcsinh dataframe."""
     required = {"experiment", "_batch", "_arcsinh_file"}
@@ -420,7 +515,9 @@ def process_batch_correction_data(
         experiment = str(file_data["experiment"].iloc[0])
         target = output_dir / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        corrected = batch_correct(file_data, marker_cols, experiment, model, invalid_markers)
+        corrected = apply_fitted_batch_correction(
+            file_data, marker_cols, experiment, model, invalid_markers
+        )
         corrected.drop(columns=["_arcsinh_file", "_batch"], errors="ignore").to_csv(
             target, index=False
         )
@@ -460,29 +557,33 @@ def _correct_files(
             relative = source.relative_to(arcsinh_dir)
             target = output_dir / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            batch_correct(data, marker_cols, experiment, model, invalid_markers).to_csv(
-                target, index=False
-            )
+            apply_fitted_batch_correction(
+                data, marker_cols, experiment, model, invalid_markers
+            ).to_csv(target, index=False)
             saved.append((source, target, len(data)))
     return saved
 
 
 def _verify_output_markers(
-    saved_files: list[tuple[Path, Path, int]], all_marker_cols: list[str]
+    saved_files: list[tuple[Path, Path, int]], all_marker_cols: list[str] | None = None
 ) -> None:
     """Ensure corrected files contain the same biological marker columns.
 
     Args:
         saved_files: Input/output paths and row counts for corrected files.
-        all_marker_cols: Candidate biological marker names.
+        all_marker_cols: Optional marker restriction for specialized callers.
 
     Raises:
         ValueError: If corrected files have different biological marker sets.
     """
-    output_marker_sets = [
-        set(pd.read_csv(target, nrows=0).columns).intersection(all_marker_cols)
-        for _, target, _ in saved_files
-    ]
+    output_marker_sets = []
+    for _, target, _ in saved_files:
+        markers = set(pd.read_csv(target, nrows=0).columns).difference(
+            _BATCH_CORRECTION_EXCLUDED_COLUMNS
+        )
+        if all_marker_cols is not None:
+            markers.intersection_update(all_marker_cols)
+        output_marker_sets.append(markers)
     if output_marker_sets and not all(
         markers == output_marker_sets[0] for markers in output_marker_sets
     ):

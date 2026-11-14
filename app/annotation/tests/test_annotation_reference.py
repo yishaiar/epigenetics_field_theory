@@ -5,14 +5,12 @@ from __future__ import annotations
 import unittest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from app.annotation.embedding import load_umap
-from app.annotation.embedding import calculate_umap
+from app.annotation.embedding import calculate_umap, load_umap
 from app.annotation.labeling import (
     assign_biological_labels,
     assign_manual_labels,
@@ -50,20 +48,12 @@ class AnnotationReferenceTests(unittest.TestCase):
     def test_calculated_umap_coordinates_match_saved_reference(self) -> None:
         summary = pd.read_csv(UMAP_SUMMARY).iloc[0]
         data = pd.read_csv(EXPRESSION_FILE, low_memory=False)
-        markers = str(summary["markers_used"]).split(", ")
         with tempfile.TemporaryDirectory() as temp:
-            with patch(
-                "app.annotation.embedding._save_embedding_plots",
-                return_value=(Path("full.png"), Path("condition.png")),
-            ):
-                actual, _ = calculate_umap(
-                    data,
-                    markers,
-                    "cell_identity",
-                    "all",
-                    {},
-                    Path(temp),
-                )
+            actual = calculate_umap(
+                data,
+                str(summary["markers_used"]).split(", "),
+                Path(temp) / "coordinates.parquet",
+            )
         expected = load_umap(UMAP_ROOT, "all", "cell_identity")
         self.assertEqual(actual["cell_id"].tolist(), expected["cell_id"].tolist())
         np.testing.assert_allclose(
@@ -81,7 +71,7 @@ class AnnotationReferenceTests(unittest.TestCase):
         np.testing.assert_array_equal(expected["cell_id"], expression["cell_id"])
 
         manual = assign_manual_labels(coordinates)
-        predicted, _ = predict_noise_xgboost(expression, manual)
+        predicted, _, _ = predict_noise_xgboost(expression, manual)
         actual_names = assign_biological_labels(predicted)
         self.assertEqual(actual_names, expected["labels"].tolist())
 

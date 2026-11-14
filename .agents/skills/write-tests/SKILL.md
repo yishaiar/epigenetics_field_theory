@@ -37,7 +37,7 @@ description: |
 - Test classes inherit from `unittest.TestCase` (sync) or `unittest.IsolatedAsyncioTestCase` (asynchronous package code) — not pytest fixtures or `pytest-asyncio`
 - No `conftest.py` — shared setup lives in the test class itself (`setUp`)
 - Use `unittest.mock.patch` / `AsyncMock` / `MagicMock` to mock external dependencies — never require a network service or external dataset in a unit test
-- Test files live beside their owner: `scbatch/<member>/tests/test_<module>.py`.
+- Test files live beside their owner: `app/<module>/tests/test_<module>.py`.
 - For scientific functions, cover AnnData metadata validation and sparse or
   dense matrices whenever the public contract supports them.
 

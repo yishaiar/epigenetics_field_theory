@@ -1,51 +1,11 @@
 """Marker arcsinh transformation extracted from main1.ipynb cell 23."""
 
 from pathlib import Path
-from typing import Any
 
-import numpy as np
 import pandas as pd
 
-from app.metadata import METADATA_EXCLUSION_COLUMNS
-
-METADATA_COLUMNS = METADATA_EXCLUSION_COLUMNS
-CSV_INDEX_ARTIFACT_COLUMNS = ("Unnamed: 0",)
-
-
-def arcsinh_transform(
-    data: pd.DataFrame, metadata_columns: list[str] | None = None
-) -> tuple[pd.DataFrame, list[str]]:
-    """Apply ``arcsinh(value / 5)`` to numeric marker columns.
-
-    Args:
-        data: Table containing unique ``cell_id`` values and marker columns.
-        metadata_columns: Columns to preserve without transforming. Defaults
-            to the project metadata exclusion list.
-
-    Returns:
-        A transformed copy of the table and the marker columns transformed.
-
-    Raises:
-        ValueError: If ``cell_id`` is absent or contains duplicate values.
-    """
-    if "cell_id" not in data.columns:
-        raise ValueError("cell_id column missing")
-    if not data["cell_id"].is_unique:
-        raise ValueError("cell_id is not unique")
-    excluded = METADATA_COLUMNS if metadata_columns is None else metadata_columns
-    index_artifacts = [column for column in data.columns if column in CSV_INDEX_ARTIFACT_COLUMNS]
-    transformed = data.drop(columns=index_artifacts).copy()
-    marker_columns = [column for column in transformed.columns if column not in excluded]
-    transformed_columns = []
-    for column in marker_columns:
-        numeric = pd.Series(
-            pd.to_numeric(pd.Series(transformed[column]), errors="coerce"), dtype=float
-        )
-        if numeric.notna().sum() == 0:
-            continue
-        transformed[column] = np.arcsinh(numeric / 5)
-        transformed_columns.append(column)
-    return transformed, transformed_columns
+from app.config.config import METADATA_COLUMNS
+from app.preprocessing.arcsinh_transform import arcsinh_transform
 
 
 def process_arcsinh_files(gated_dir: Path, output_dir: Path) -> pd.DataFrame:
@@ -69,7 +29,7 @@ def process_arcsinh_files(gated_dir: Path, output_dir: Path) -> pd.DataFrame:
     rows = []
     for csv_file in files:
         data = pd.read_csv(csv_file, low_memory=False)
-        transformed, columns = arcsinh_transform(data)
+        transformed, columns = arcsinh_transform(data, skip_columns=METADATA_COLUMNS)
         relative = csv_file.relative_to(gated_dir)
         target = (output_dir / relative).with_name(
             relative.name.replace("_GATED.csv", "_ARCSINH_5.csv")

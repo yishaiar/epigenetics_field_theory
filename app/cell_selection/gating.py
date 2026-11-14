@@ -1,0 +1,113 @@
+"""Raw H3.3/H4 gating extracted from main1.ipynb cell 21."""
+
+import re
+from pathlib import Path
+
+import pandas as pd
+
+from app.preprocessing.gating import GATE_COLUMNS, gate_histones
+
+
+def safe_name(x: object) -> str:
+    """Convert a value to a filesystem-safe name.
+
+    Args:
+        x: Value to stringify and sanitize.
+
+    Returns:
+        A string with unsafe filename characters and whitespace replaced.
+    """
+    x = str(x)
+    x = re.sub(r'[<>:"/\\|?*]', "_", x)
+    x = re.sub(r"\s+", "_", x)
+    return x
+
+
+def _gate_file(
+    csv_file: Path, experiment: str, group: str, output_dir: Path
+) -> dict[str, object] | None:
+    """Gate one split CSV and save its output and cell-count summary.
+
+    Args:
+        csv_file: Split CSV to load and gate.
+        experiment: Experiment name used in the output path and summary.
+        group: GFP group used in the output path and summary.
+        output_dir: Root directory for gated files.
+
+    Returns:
+        A row of gate counts and file paths, or ``None`` when the input is empty.
+    """
+    data = pd.read_csv(csv_file, low_memory=False)
+    if data.empty:
+        return None
+    gated, _ = gate_histones(data)
+    sample_name = data["sample_name"].iloc[0]
+    condition = data["condition"].iloc[0]
+    target_dir = output_dir / experiment / group / safe_name(condition)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{safe_name(sample_name)}_{group}_GATED.csv"
+    gated.to_csv(target, index=False)
+    n_input = len(data)
+    n_gated = len(gated)
+    return {
+        "experiment": experiment,
+        "condition": condition,
+        "sample_name": sample_name,
+        "gfp_group": group,
+        "input_file": str(csv_file),
+        "gated_file": str(target),
+        "gate_columns": " | ".join(GATE_COLUMNS),
+        "gate_rule": "H3.3 > 5 and H4 > 5 on raw values",
+        "n_input_cells": n_input,
+        "n_gated_cells": n_gated,
+        "n_removed_by_gate": n_input - n_gated,
+        "pct_kept": 100 * n_gated / n_input if n_input > 0 else 0,
+    }
+
+
+def process_gated_files(
+    split_dir: Path,
+    output_dir: Path,
+    experiments: list[str],
+    groups: list[str] | None = None,
+) -> pd.DataFrame:
+    """Gate split CSV files and write the gated files and summary table.
+
+    Args:
+        split_dir: Root containing experiment and GFP-group directories.
+        output_dir: Destination root for gated files and summary CSV.
+        experiments: Experiment directories to process, in requested order.
+        groups: GFP groups to process; defaults to both high and low groups.
+
+    Returns:
+        A per-file table of gate counts and output paths.
+    """
+    rows = []
+    for experiment in experiments:
+        for group in groups or ["GFP_high", "GFP_low"]:
+            input_dir = split_dir / experiment / group
+            if not input_dir.is_dir():
+                continue
+            files = sorted(input_dir.glob("*.csv"))
+            for csv_file in files:
+                result = _gate_file(csv_file, experiment, group, output_dir)
+                if result is not None:
+                    rows.append(result)
+    columns = [
+        "experiment",
+        "condition",
+        "sample_name",
+        "gfp_group",
+        "input_file",
+        "gated_file",
+        "gate_columns",
+        "gate_rule",
+        "n_input_cells",
+        "n_gated_cells",
+        "n_removed_by_gate",
+        "pct_kept",
+    ]
+    summary = pd.DataFrame(rows, columns=pd.Index(columns))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    summary.to_csv(output_dir / "GATED_summary.csv", index=False)
+    return summary
