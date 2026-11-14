@@ -39,7 +39,7 @@ class BatchCorrectionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.frame = pd.DataFrame(
             {
-                "cell_id": ["a", "b"],
+                "cell_uid": ["a", "b"],
                 "marker": np.arcsinh(np.array([5.0, 10.0]) / 5),
                 "invalid": [1.0, 2.0],
             }
@@ -52,11 +52,11 @@ class BatchCorrectionTests(unittest.TestCase):
         )
 
         np.testing.assert_allclose(corrected["marker"], self.frame["marker"])
-        self.assertEqual(corrected["cell_id"].tolist(), ["a", "b"])
+        self.assertEqual(corrected["cell_uid"].tolist(), ["a", "b"])
         self.assertNotIn("invalid", corrected.columns)
         self.assertEqual(self.model.batch_labels.tolist(), ["batch2", "batch2"])
 
-    def test_annotation_metadata_is_excluded_from_batch_correction(self) -> None:
+    def test_unselected_annotation_columns_are_preserved(self) -> None:
         data = self.frame.assign(
             labels=["basal", "classical"],
             leiden_cluster=pd.array([0, 1], dtype="Int64"),
@@ -65,7 +65,7 @@ class BatchCorrectionTests(unittest.TestCase):
 
         corrected = apply_fitted_batch_correction(
             data,
-            ["marker", "leiden_cluster", "annotation_present"],
+            ["marker", "leiden_cluster"],
             "batch2",
             self.model,
             ["labels"],
@@ -98,7 +98,7 @@ class BatchCorrectionTests(unittest.TestCase):
     ) -> None:
         pooled = pd.DataFrame(
             {
-                "cell_id": ["a", "b", "c", "d"],
+                "cell_uid": ["a", "b", "c", "d"],
                 "experiment": ["batch2", "batch2", "batch3", "batch3"],
                 "condition": ["treated", "untreated", "treated", "untreated"],
                 "sample_name": ["m1", "m1", "m2", "m2"],
@@ -114,7 +114,7 @@ class BatchCorrectionTests(unittest.TestCase):
             factory_calls.append(arguments)
             return model
 
-        metadata = ["cell_id", "experiment", "condition", "sample_name", "source_file"]
+        metadata = ["cell_uid", "experiment", "condition", "sample_name", "source_file"]
         corrected, corrected_columns = batch_correct(
             pooled, skip_columns=metadata, model_factory=factory
         )
@@ -125,22 +125,22 @@ class BatchCorrectionTests(unittest.TestCase):
         self.assertEqual(model.batch_labels.tolist(), ["batch2", "batch2", "batch3", "batch3"])
         self.assertEqual(corrected.columns.tolist(), metadata + ["CD109", "unrecognized"])
         self.assertEqual(corrected_columns, ["CD109", "unrecognized"])
-        self.assertEqual(corrected["cell_id"].tolist(), pooled["cell_id"].tolist())
+        self.assertEqual(corrected["cell_uid"].tolist(), pooled["cell_uid"].tolist())
         np.testing.assert_allclose(corrected["CD109"], pooled["CD109"])
         np.testing.assert_allclose(corrected["unrecognized"], pooled["unrecognized"])
 
     def test_pooled_batch_correction_requires_source_provenance(self) -> None:
         pooled = pd.DataFrame(
             {
-                "cell_id": ["a"],
+                "cell_uid": ["a"],
                 "experiment": ["batch2"],
                 "condition": ["treated"],
                 "CD109": [1.0],
             }
         )
 
-        with self.assertRaisesRegex(ValueError, "per-source file metadata"):
-            batch_correct(pooled, skip_columns=["cell_id", "experiment", "condition"])
+        with self.assertRaisesRegex(ValueError, "gfp_group.*sample_name"):
+            batch_correct(pooled, skip_columns=["cell_uid", "experiment", "condition"])
 
     def test_marker_selection_drops_nonfinite_markers_but_keeps_source_order(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -166,7 +166,7 @@ class BatchCorrectionTests(unittest.TestCase):
                 folder.mkdir(parents=True)
                 pd.DataFrame(
                     {
-                        "cell_id": [f"{experiment}-0", f"{experiment}-1"],
+                        "cell_uid": [f"{experiment}-0", f"{experiment}-1"],
                         "condition": ["treated", "treated"],
                         "M": np.arcsinh(np.array([5.0, 10.0]) / 5),
                     }
@@ -201,7 +201,7 @@ class BatchCorrectionTests(unittest.TestCase):
                 model.fit_batch_labels.tolist(), ["batch2", "batch2", "batch3", "batch3"]
             )
             self.assertEqual(
-                fit_subset["cell_id"].tolist(),
+                fit_subset["cell_uid"].tolist(),
                 ["batch2-1", "batch2-0", "batch3-0", "batch3-1"],
             )
 

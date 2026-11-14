@@ -81,8 +81,6 @@ def batch_correct(
     source_group_columns = (
         [source_column] if source_column is not None else ["experiment", "sample_name", "gfp_group"]
     )
-    if source_column is None and not {"sample_name", "gfp_group"}.issubset(df.columns):
-        raise ValueError("Pooled arcsinh data requires per-source file metadata")
     required = {"experiment", "condition", *source_group_columns}
     missing = sorted(required.difference(df.columns))
     if missing:
@@ -273,8 +271,6 @@ def fit_batch_correction_data(
     source_group_columns = (
         [source_column] if source_column is not None else ["experiment", "sample_name", "gfp_group"]
     )
-    if source_column is None and not {"sample_name", "gfp_group"}.issubset(data.columns):
-        raise ValueError("Loaded arcsinh data requires per-source file metadata")
     required = {"experiment", "condition"}
     required.update(source_group_columns)
     missing = sorted(required.difference(data.columns))

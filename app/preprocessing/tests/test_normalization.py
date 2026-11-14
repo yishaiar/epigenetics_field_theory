@@ -37,7 +37,7 @@ class NormalizationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.frame = pd.DataFrame(
             {
-                "cell_id": ["a", "b"],
+                "cell_uid": ["a", "b"],
                 "experiment": ["batch2", "batch2"],
                 "sample_name": ["sample1", "sample1"],
                 "condition": ["treated", "treated"],
@@ -81,6 +81,7 @@ class NormalizationTests(unittest.TestCase):
             data,
             config_factory=NormalizationConfig,
             transform=lambda frame, config: NormalizationResult(frame.assign(ACSS2=[10.0, 12.0])),
+            skip_columns=["annotation_present"],
         )
 
         self.assertEqual(markers, ["ACSS2", "new_marker"])
@@ -112,7 +113,7 @@ class NormalizationTests(unittest.TestCase):
         package.__path__ = []
         sample_one = self.frame.assign(source_file="sample-one.csv")
         sample_two = self.frame.assign(
-            cell_id=["c", "d"],
+            cell_uid=["c", "d"],
             source_file="sample-two.csv",
             ACSS2=[7.0, 8.0],
         )
@@ -123,7 +124,7 @@ class NormalizationTests(unittest.TestCase):
         ):
             normalized, normalized_columns = normalize_pooled_dataframe(
                 pooled,
-                skip_columns=["cell_id", "experiment", "sample_name", "condition", "source_file"],
+                skip_columns=["cell_uid", "experiment", "sample_name", "condition", "source_file"],
             )
 
         self.assertEqual(
@@ -135,7 +136,7 @@ class NormalizationTests(unittest.TestCase):
         )
         self.assertEqual(normalized_columns, ["ACSS2"])
         self.assertEqual(normalized["ACSS2"].tolist(), [105.0, 106.0, 107.0, 108.0])
-        self.assertEqual(normalized["cell_id"].tolist(), ["a", "b", "c", "d"])
+        self.assertEqual(normalized["cell_uid"].tolist(), ["a", "b", "c", "d"])
 
     def test_normalization_file_workflow_writes_source_names_and_summaries(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

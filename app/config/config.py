@@ -8,9 +8,7 @@ METADATA_COLUMNS = [
     "condition",  # Treatment condition, such as treated or untreated.
     "labels",  # Biological subtype annotation used in downstream comparisons.
     "cell_uid",  # Stable cell identifier used to join annotations to cells.
-    "cell_id",  # Legacy cell identifier retained by source CSVs.
     "leiden_cluster",  # Leiden cluster assignment exported with annotations.
-    "annotation_present",  # Flag indicating whether a cell has annotation data.
 
     "path",  # Full input CSV path used to trace each cell to its source file.
     "raw_row_id",  # Original source-row index used to construct cell_uid.
