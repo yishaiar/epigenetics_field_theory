@@ -14,15 +14,7 @@ from app.utils.xgboost import fit_xgboost_probabilities
 
 
 def assign_manual_labels(data: pd.DataFrame) -> np.ndarray:
-    """Assign classical, basal, or unassigned labels from UMAP regions.
-
-    Args:
-        data: Table containing ``UMAP1`` and ``UMAP2`` coordinates.
-
-    Returns:
-        Integer labels aligned with the input rows: 0 for classical, 1 for
-        basal, and -1 for cells outside the manually defined regions.
-    """
+    """Assign classical, basal, or unassigned labels from UMAP regions."""
     labels = np.full(len(data), -1, dtype=int)
     labels[(data["UMAP1"].to_numpy() > 5) & (data["UMAP2"].to_numpy() > 12)] = 0
     labels[(data["UMAP1"].to_numpy() < 0) & (data["UMAP2"].to_numpy() > 10)] = 1

@@ -32,7 +32,7 @@ CD45_CUTOFFS_ASINH = {
 GFP_CUTOFFS_ASINH = {"batch2": 2.0, "batch3": 4.0, "batch4_extra_treatment": 3.0}
 
 # Features used to fit Notebook 3's cell identity UMAP.
-CELL_IDENTITY_MARKERS = (
+CELL_IDENTITY_MARKERS = [
     "CD109",
     "CD133",
     "CD24",
@@ -51,11 +51,11 @@ CELL_IDENTITY_MARKERS = (
     "TSPAN8",
     "Vimentin",
     "pRb",
-)
-
+]
+EXCLUDED_FROM_UMAP = ["GFP", "Pan-KRT", "CD45"]
 
 # Markers used for Notebook 3 heatmaps and Notebook 4 basal/classical comparisons.
-BASAL_CLASSICAL_SEPARATING_MARKERS = (
+BASAL_CLASSICAL_SEPARATING_MARKERS = [
     "TSPAN8",
     "GATA6",
     "GAL4",
@@ -70,4 +70,42 @@ BASAL_CLASSICAL_SEPARATING_MARKERS = (
     "KI67",
     "pRb",
     "CD109",
-)
+]
+
+
+CORE_HISTONES = [
+    "H2A",
+    "H3",
+    "H3.3",
+    "H4",
+]
+
+EPIGENETIC_MARKERS = [
+    # histone modifications
+    "H2AK119ub",
+    "H2BK5ac",
+    "H3K27ac",
+    "H3K27me2",
+    "H3K27me3",
+    "H3K36me2",
+    "H3K36me3",
+    "H3K4me1",
+    "H3K4me2",
+    "H3K4me3",
+    "H3K9ac",
+    "H3K9me2",
+    "H3K9me3",
+    "H3S28p",
+    "H4K16ac",
+    "H4K20me3",
+    "pH2A.X",
+    # chromatin / epigenetic modifiers
+    "EZH2",
+    "MBD",
+    "ACSS2",
+]
+
+
+OTHER_MARKERS = [
+    "DNA",
+]

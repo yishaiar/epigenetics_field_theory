@@ -12,10 +12,10 @@ base_dir = Path(__file__).resolve().parents[1]
 # project_dir = base_dir.parent
 # Project root used to resolve raw data and results.
 project_dir = Path("/Users/yishai/Desktop/epigenetics_field_theory")
-# Raw input root used by the cell-selection stage.
-data_dir = project_dir / "raw_data"
+# Data input root
+full_data_dir = project_dir / "data"
 # Synthetic/demo input root selected when DEMO_MODE is true.
-demo_data_dir = project_dir / "demo_data" / "raw_data"
+demo_data_dir = project_dir / "demo_data"
 # Root for experiment outputs.
 results_dir = project_dir / "results"
 
@@ -45,8 +45,8 @@ SKIP_BATCH_CORRECTION = os.getenv("skip_batch_correction", "True").strip().lower
 }
 # Notebook 2 balances GFP-high samples after z-scoring when true.
 SUBSAMPLE = os.getenv("subsample", "false").strip().lower() in {"1", "true", "yes"}
-# Active raw input root selected from DEMO_MODE.
-active_data_dir = demo_data_dir if DEMO_MODE else data_dir
+# Active data root selected using DEMO_MODE.
+DATA_DIR = demo_data_dir if DEMO_MODE else full_data_dir
 
 # Date label used by default for experiment output folders.
 RUN_DATE = os.getenv("RUN_DATE") or get_run_date()
@@ -73,8 +73,8 @@ __all__ = [
     "SUBSAMPLE",
     "SOURCE_REFERENCE",
     "base_dir",
-    "active_data_dir",
-    "data_dir",
+    "DATA_DIR",
+    "full_data_dir",
     "demo_data_dir",
     "env_dir",
     "get_run_date",

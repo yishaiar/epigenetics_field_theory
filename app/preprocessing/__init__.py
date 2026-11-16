@@ -17,6 +17,7 @@ from .normalization import (
     normalize_sample,
     process_normalization_files,
 )
+from .normalization_new import normalize_pooled_dataframe_new
 from .pooling import pool_csv_files
 from .scaling import (
     combine_scaled_experiments,
@@ -50,4 +51,5 @@ __all__ = [
     "select_correction_markers",
     "zscore_markers",
     "zscore_markers_from_balanced_reference",
+    "normalize_pooled_dataframe_new",
 ]

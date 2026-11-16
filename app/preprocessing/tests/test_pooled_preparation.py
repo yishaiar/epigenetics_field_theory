@@ -72,15 +72,13 @@ class PooledPreparationTests(unittest.TestCase):
         gated, gate_columns = gate_histones(
             data,
             skip_columns=self.metadata,
-            lower_outlier_quantile=0,
-            upper_outlier_quantile=1,
         )
 
         self.assertEqual(gated["cell_id"].tolist(), ["pass"])
         self.assertEqual(gate_columns, ["H3.3", "H4", "marker"])
         self.assertEqual(gated.columns.tolist(), data.columns.tolist())
 
-    def test_pooled_histone_gate_removes_outliers_within_each_mouse(self) -> None:
+    def test_pooled_histone_gate_does_not_trim_marker_outliers(self) -> None:
         cells_per_mouse = 100
         mouse_values = np.arange(cells_per_mouse, dtype=float) + 10
         data = pd.DataFrame(
@@ -101,13 +99,13 @@ class PooledPreparationTests(unittest.TestCase):
 
         self.assertEqual(gate_columns, ["H3.3", "H4", "marker"])
         self.assertEqual(
-            gated.groupby("sample_name").size().to_dict(), {"mouse1": 98, "mouse2": 98}
+            gated.groupby("sample_name").size().to_dict(), {"mouse1": 100, "mouse2": 100}
         )
         self.assertEqual(
             gated["cell_id"].tolist(),
             [
-                *(f"mouse1-{i}" for i in range(1, 99)),
-                *(f"mouse2-{i}" for i in range(1, 99)),
+                *(f"mouse1-{i}" for i in range(cells_per_mouse)),
+                *(f"mouse2-{i}" for i in range(cells_per_mouse)),
             ],
         )
 
