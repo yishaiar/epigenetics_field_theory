@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import LabelEncoder
 
 from app.annotation.clustering import (
     calc_leiden,
@@ -46,10 +47,13 @@ class ManualLabelTests(unittest.TestCase):
         expression = pd.DataFrame(
             {"GAL4": [0.1, 0.2, 0.3], "GATA6": [0.4, 0.5, 0.6], "TSPAN8": [0.7, 0.8, 0.9]}
         )
-        labels, probabilities, model = predict_noise_xgboost(expression, np.array([1, -1, -1]))
+        labels, probabilities, model, encoder = predict_noise_xgboost(
+            expression, pd.Series([1, -1, -1]), features=["GAL4", "GATA6", "TSPAN8"]
+        )
         np.testing.assert_array_equal(labels, [1, 1, 1])
         self.assertIsNone(probabilities)
         self.assertIsNone(model)
+        self.assertIsNone(encoder)
 
     def test_noise_predictions_return_model_probabilities(self) -> None:
         expression = pd.DataFrame(
@@ -59,17 +63,17 @@ class ManualLabelTests(unittest.TestCase):
                 "TSPAN8": [0.0, 0.1, 1.0, 0.9, 0.05, 0.95],
             }
         )
-        labels = np.array([0, 0, 1, 1, -1, -1])
+        labels = pd.Series([0, 0, 1, 1, -1, -1])
 
-        predicted, probabilities, model = predict_noise_xgboost(
+        predicted, probabilities, model, encoder = predict_noise_xgboost(
             expression,
             labels,
             n_estimators=10,
             max_depth=2,
-            features=("GAL4", "GATA6", "TSPAN8"),
+            features=["GAL4", "GATA6", "TSPAN8"],
         )
 
-        if probabilities is None or model is None:
+        if probabilities is None or model is None or encoder is None:
             raise AssertionError("XGBoost should return probabilities for every input row")
         self.assertEqual(probabilities.shape, (len(expression), 2))
         np.testing.assert_allclose(probabilities.sum(axis=1), np.ones(len(expression)))
@@ -84,37 +88,56 @@ class ManualLabelTests(unittest.TestCase):
             },
             index=pd.Index([10, 20, 30, 40]),
         )
-        manual_labels = np.array([0, -1, 1, -1])
+        manual_labels = pd.Series([0, -1, 1, -1])
         expected_probabilities = np.array(
             [[0.9, 0.1], [0.7, 0.3], [0.2, 0.8], [0.1, 0.9]], dtype=np.float32
         )
         model = object()
 
-        with patch(
-            "app.annotation.labeling.fit_xgboost_probabilities",
-            return_value=(expected_probabilities, np.array([0, 1]), model),
-        ) as fit:
-            predicted, probabilities, actual_model = predict_noise_xgboost(
-                expression, manual_labels
+        encoder = LabelEncoder().fit([0, 1])
+        expected_labels = np.array([0, 0, 1, 1])
+        with (
+            patch(
+                "app.annotation.labeling.fit_xgboost_classifier",
+                return_value=(model, encoder),
+            ) as fit,
+            patch(
+                "app.annotation.labeling.predict_xgboost_classifier",
+                return_value=(expected_labels, expected_probabilities),
+            ) as predict,
+        ):
+            predicted, probabilities, actual_model, actual_encoder = predict_noise_xgboost(
+                expression, manual_labels, features=["GAL4", "GATA6", "TSPAN8"]
             )
 
         np.testing.assert_allclose(
             fit.call_args.args[0], expression.iloc[[0, 2]].to_numpy(dtype=np.float32)
         )
         np.testing.assert_array_equal(fit.call_args.args[1], [0, 1])
-        np.testing.assert_allclose(fit.call_args.args[2], expression.to_numpy(dtype=np.float32))
+        self.assertEqual(fit.call_args.kwargs["n_estimators"], 100)
+        self.assertEqual(fit.call_args.kwargs["max_depth"], 3)
+        self.assertEqual(fit.call_args.kwargs["learning_rate"], 0.1)
+        self.assertIs(predict.call_args.args[0], model)
+        pd.testing.assert_frame_equal(predict.call_args.args[1], expression)
+        self.assertEqual(predict.call_args.args[2], ["GAL4", "GATA6", "TSPAN8"])
+        self.assertIs(predict.call_args.args[3], encoder)
         if probabilities is None:
             self.fail("XGBoost should return probabilities for every input row")
         np.testing.assert_array_equal(probabilities, expected_probabilities)
         np.testing.assert_array_equal(predicted, [0, 0, 1, 1])
         self.assertIs(actual_model, model)
+        self.assertIs(actual_encoder, encoder)
 
     def test_noise_predictions_reject_empty_training_labels(self) -> None:
         expression = pd.DataFrame(
             {"GAL4": [0.1, 0.2, 0.3], "GATA6": [0.4, 0.5, 0.6], "TSPAN8": [0.7, 0.8, 0.9]}
         )
         with self.assertRaisesRegex(ValueError, "No manually labeled cells"):
-            predict_noise_xgboost(expression, np.array([-1, -1, -1]))
+            predict_noise_xgboost(
+                expression,
+                pd.Series([-1, -1, -1]),
+                features=["GAL4", "GATA6", "TSPAN8"],
+            )
 
     def test_save_rejects_misaligned_cell_ids(self) -> None:
         expression = pd.DataFrame(
@@ -249,7 +272,7 @@ class EmbeddingAndClusteringTests(unittest.TestCase):
             root = Path(directory)
             plot_full_umap(data, root / "full.png")
             plot_condition_umap(data, root / "conditions.png")
-            plot_clusters(data, np.array([0, 1, 0]), "clusters", root / "clusters.png")
+            plot_clusters(data, pd.Series([0, 1, 0]), "clusters", root / "clusters.png")
             plot_clusters_by_condition(
                 data,
                 np.array([0, 1, 0]),

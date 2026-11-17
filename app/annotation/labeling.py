@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import List
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier
+from sklearn.preprocessing import LabelEncoder
+
 
 from app.config.config import METADATA_COLUMNS
-from app.utils.xgboost import fit_xgboost_probabilities
+from app.utils.xgboost import fit_xgboost_classifier, predict_xgboost_classifier
 
 
 def assign_manual_labels(data: pd.DataFrame) -> np.ndarray:
@@ -24,14 +26,15 @@ def assign_manual_labels(data: pd.DataFrame) -> np.ndarray:
 
 def predict_noise_xgboost(
     data: pd.DataFrame,
-    labels: np.ndarray,
+    labels: pd.Series[str],
+    features: List[str],
     n_estimators: int = 100,
     max_depth: int = 3,
     learning_rate: float = 0.1,
     random_state: int = 42,
     n_jobs: int = 1,
-    features: Sequence[str] | None = None,
-) -> tuple[np.ndarray, np.ndarray | None, XGBClassifier | None]:
+    noise=-1,
+) -> tuple[np.ndarray, np.ndarray | None, XGBClassifier | None, LabelEncoder | None]:
     """Train from manual labels, then predict labels and probabilities for every row.
 
     Args:
@@ -53,36 +56,30 @@ def predict_noise_xgboost(
     Raises:
         ValueError: If labels are misaligned or there are no labeled cells.
     """
-    if features is None:
-        excluded = {*METADATA_COLUMNS, "UMAP1", "UMAP2"}
-        features = [
-            column
-            for column in data.select_dtypes(include=[np.number]).columns
-            if column not in excluded
-        ]
-    matrix = data[list(features)].to_numpy(dtype=np.float32)
+
+    matrix = data[features].to_numpy(dtype=np.float32)
     values = np.asarray(labels, dtype=int)
     if len(matrix) != len(values):
         raise ValueError("Label count must match expression row count")
-    train_mask = values != -1
+    train_mask = values != noise
     clusters = np.unique(values[train_mask])
     if len(clusters) == 0:
         raise ValueError("No manually labeled cells remain for XGBoost training")
     if len(clusters) == 1:
-        return np.full(len(values), clusters[0], dtype=int), None, None
+        return np.full(len(values), clusters[0], dtype=int), None, None, None
 
-    probabilities, class_labels, model = fit_xgboost_probabilities(
+    model, encoder = fit_xgboost_classifier(
         matrix[train_mask],
         values[train_mask],
-        matrix,
         n_estimators=n_estimators,
         max_depth=max_depth,
         learning_rate=learning_rate,
         random_state=random_state,
         n_jobs=n_jobs,
     )
-    predicted_labels = class_labels[probabilities.argmax(axis=1)]
-    return predicted_labels, probabilities, model
+
+    predicted_labels, probabilities = predict_xgboost_classifier(model, data, features, encoder)
+    return predicted_labels, probabilities, model, encoder
 
 
 def assign_biological_labels(labels: np.ndarray) -> list[str | int]:

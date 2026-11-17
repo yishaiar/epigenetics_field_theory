@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
+from typing import List
+import pandas as pd
+
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 
 
-def fit_xgboost_probabilities(
+def fit_xgboost_classifier(
     training_features: np.ndarray,
     training_labels: np.ndarray,
-    prediction_features: np.ndarray,
-    *,
     n_estimators: int = 100,
     max_depth: int = 3,
     learning_rate: float = 0.1,
     random_state: int = 42,
     n_jobs: int = 1,
-) -> tuple[np.ndarray, np.ndarray, XGBClassifier]:
+) -> tuple[XGBClassifier, LabelEncoder]:
     """Fit an XGBoost classifier and return probabilities in encoded class order.
 
     Args:
@@ -39,16 +40,12 @@ def fit_xgboost_probabilities(
             or fewer than two training classes are provided.
     """
     training_features = np.asarray(training_features, dtype=np.float32)
-    prediction_features = np.asarray(prediction_features, dtype=np.float32)
+
     training_labels = np.asarray(training_labels)
-    if training_features.ndim != 2 or prediction_features.ndim != 2:
-        raise ValueError("Training and prediction features must be two-dimensional")
     if training_labels.ndim != 1:
         raise ValueError("Training labels must be one-dimensional")
     if len(training_features) != len(training_labels):
         raise ValueError("Training feature row count must match label count")
-    if training_features.shape[1] != prediction_features.shape[1]:
-        raise ValueError("Training and prediction features must have matching columns")
 
     encoder = LabelEncoder()
     encoded_labels = encoder.fit_transform(training_labels)
@@ -71,8 +68,29 @@ def fit_xgboost_probabilities(
         verbosity=0,
     )
     model.fit(training_features, encoded_labels)
-    if prediction_features.shape[0]:
-        probabilities = np.asarray(model.predict_proba(prediction_features), dtype=np.float32)
-    else:
-        probabilities = np.empty((0, class_count), dtype=np.float32)
-    return probabilities, class_labels, model
+    return model, encoder
+
+
+def predict_xgboost_classifier(
+    model: XGBClassifier,
+    data: pd.DataFrame,
+    features: List[str],
+    encoder: LabelEncoder | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Predict class labels and probabilities for the selected dataframe features.
+
+    Args:
+        model: Fitted XGBoost classifier.
+        data: Rows to classify.
+        features: Feature columns used to fit the classifier.
+        encoder: Label encoder fitted with the training labels.
+
+    Returns:
+        Predicted class labels and a row-by-class probability array.
+    """
+    matrix = data[features].to_numpy(dtype=np.float32)
+    prediction_features = np.asarray(matrix, dtype=np.float32)
+    # encoded_labels = encoder.fit_transform(training_labels)
+    probabilities = np.asarray(model.predict_proba(prediction_features), dtype=np.float32)
+    predicted_labels = model.classes_[probabilities.argmax(axis=1)]
+    return predicted_labels, probabilities
