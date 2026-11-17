@@ -58,7 +58,7 @@ OUTPUT_ROOT = (
 )
 # Shared annotation sidecar consumed during cell selection.
 ANNOTATION_FILE = results_dir / "cell_annotations.csv"
-
+UMAP_DIR = results_dir
 # Notebook used as the source reference for extracted behavior.
 SOURCE_REFERENCE = Path(os.getenv("SOURCE_REFERENCE") or "main1.ipynb").expanduser()
 if not SOURCE_REFERENCE.is_absolute():

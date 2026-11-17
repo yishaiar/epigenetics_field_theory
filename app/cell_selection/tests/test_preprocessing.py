@@ -18,12 +18,12 @@ from app.cell_selection.filtering import (
 from app.cell_selection.gating import process_gated_files
 from app.cell_selection.loading import (
     add_cell_uid,
-    attach_annotation_labels,
     load_raw_data,
     save_loading_summary,
     summarize_raw_data,
 )
 from app.cell_selection.transformation import process_arcsinh_files
+from app.utils import attach_annotation_labels
 
 
 class PreprocessingTests(unittest.TestCase):
@@ -98,12 +98,12 @@ class PreprocessingTests(unittest.TestCase):
                 {
                     "cell_uid": pd.Series(dtype="string"),
                     "labels": pd.Series(dtype="string"),
-                    "leiden_cluster": pd.Series(dtype="Int64"),
+                    "leiden_labels": pd.Series(dtype="Int64"),
                 }
             ).to_csv(annotations, index=False)
 
             loaded = add_cell_uid(load_raw_data(root, ["batch2"]))
-            loaded = attach_annotation_labels(loaded, annotations)
+            loaded = attach_annotation_labels(loaded, str(annotations))
             summary = summarize_raw_data(loaded)
 
             self.assertNotIn("batch", loaded.columns)
@@ -111,7 +111,7 @@ class PreprocessingTests(unittest.TestCase):
             self.assertEqual(loaded["cell_id"].tolist(), ["a-high", "a-low"])
             self.assertNotIn("annotation_present", loaded.columns)
             self.assertTrue(loaded["labels"].isna().all())
-            self.assertTrue(loaded["leiden_cluster"].isna().all())
+            self.assertTrue(loaded["leiden_labels"].isna().all())
             self.assertEqual(summary["n_cells"].tolist(), [2])
             self.assertEqual(summary["first_cell_id"].tolist(), ["a-high"])
             self.assertEqual(summary["last_cell_id"].tolist(), ["a-low"])
@@ -120,8 +120,8 @@ class PreprocessingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             data = add_cell_uid(self.frame.iloc[:2])
 
-            with self.assertRaisesRegex(ValueError, "No annotations file found"):
-                attach_annotation_labels(data, Path(temporary) / "missing_annotations.csv")
+            with self.assertRaises(FileNotFoundError):
+                attach_annotation_labels(data, str(Path(temporary) / "missing_annotations.csv"))
 
     def test_annotation_map_is_joined_by_cell_uid_without_presence_column(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -134,12 +134,12 @@ class PreprocessingTests(unittest.TestCase):
                 {
                     "cell_uid": ["batch2_source_1"],
                     "labels": ["classical"],
-                    "leiden_cluster": [3],
+                    "leiden_labels": [3],
                 }
             ).to_csv(annotation_file, index=False)
 
             loaded = add_cell_uid(load_raw_data(root, ["batch2"]))
-            loaded = attach_annotation_labels(loaded, annotation_file)
+            loaded = attach_annotation_labels(loaded, str(annotation_file))
 
             self.assertEqual(
                 loaded["cell_uid"].tolist(),
@@ -148,8 +148,8 @@ class PreprocessingTests(unittest.TestCase):
             self.assertEqual(add_cell_uid(loaded)["cell_uid"].tolist(), loaded["cell_uid"].tolist())
             self.assertTrue(pd.isna(loaded.loc[0, "labels"]))
             self.assertEqual(loaded.loc[1, "labels"], "classical")
-            self.assertTrue(pd.isna(loaded.loc[0, "leiden_cluster"]))
-            self.assertEqual(loaded.loc[1, "leiden_cluster"], 3)
+            self.assertTrue(pd.isna(loaded.loc[0, "leiden_labels"]))
+            self.assertEqual(loaded.loc[1, "leiden_labels"], 3)
             self.assertNotIn("annotation_present", loaded.columns)
 
     def test_annotation_uid_found_in_input_receives_its_annotation(self) -> None:
@@ -159,7 +159,7 @@ class PreprocessingTests(unittest.TestCase):
                 {
                     "cell_uid": ["batch2_source_1"],
                     "labels": ["basal"],
-                    "leiden_cluster": [0],
+                    "leiden_labels": [0],
                 }
             )
             annotation_rows.to_csv(annotation_file, index=False)
@@ -167,12 +167,12 @@ class PreprocessingTests(unittest.TestCase):
             annotation_uid = annotation_rows["cell_uid"].loc[0]
 
             matching_input_row = data.loc[data["cell_uid"].eq(annotation_uid)]
-            labeled = attach_annotation_labels(data, annotation_file)
+            labeled = attach_annotation_labels(data, str(annotation_file))
 
             self.assertEqual(len(matching_input_row), 1)
-            self.assertEqual(labeled.index.tolist(), [10, 20])
-            self.assertEqual(labeled.loc[20, "labels"], "basal")
-            self.assertEqual(labeled.loc[20, "leiden_cluster"], 0)
+            self.assertEqual(labeled.index.tolist(), [0, 1])
+            self.assertEqual(labeled.loc[1, "labels"], "basal")
+            self.assertEqual(labeled.loc[1, "leiden_labels"], 0)
             self.assertNotIn("annotation_present", labeled.columns)
 
     def test_marker_lookup_prefers_exact_case_insensitive_match(self) -> None:

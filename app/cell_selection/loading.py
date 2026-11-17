@@ -1,7 +1,6 @@
 """Load annotated raw CSV files and summarize their sample provenance."""
 
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -80,116 +79,6 @@ def add_cell_uid(data: pd.DataFrame) -> pd.DataFrame:
     result[CELL_UID_COLUMN] = uid_values
     if not result[CELL_UID_COLUMN].is_unique:
         raise ValueError("Generated cell_uid values are not unique")
-    return result
-
-
-def _read_annotation_rows(annotation_file: Path) -> pd.DataFrame:
-    """Read annotation rows and verify their required columns.
-
-    Args:
-        annotation_file: CSV containing cell UIDs, labels, and cluster IDs.
-
-    Returns:
-        The loaded annotation table.
-
-    Raises:
-        ValueError: If a required annotation column is missing.
-    """
-    annotation = pd.read_csv(annotation_file, low_memory=False)
-    required = {CELL_UID_COLUMN, "labels", "leiden_cluster"}
-    missing = required.difference(annotation.columns)
-    if missing:
-        raise ValueError(f"Annotation map is missing required columns: {sorted(missing)}")
-    return annotation
-
-
-def _build_annotation_lookup(annotation: pd.DataFrame) -> dict[str, tuple[object, object]]:
-    """Validate annotation values and index them by stable cell UID.
-
-    Args:
-        annotation: Table with unique cell UIDs, supported labels, and integer
-            cluster IDs.
-
-    Returns:
-        A mapping from string cell UID to its label and cluster ID.
-
-    Raises:
-        ValueError: If identifiers or annotation values are invalid.
-    """
-    if (
-        annotation[CELL_UID_COLUMN].isna().to_numpy().any()
-        or not annotation[CELL_UID_COLUMN].is_unique
-    ):
-        raise ValueError("Annotation map cell_uid values must be non-null and unique")
-    invalid_labels = ~annotation["labels"].isin(["basal", "classical"])
-    if bool(invalid_labels.any()):
-        raise ValueError("Annotation map labels must be 'basal' or 'classical'")
-    cluster_values = pd.Series(pd.to_numeric(annotation["leiden_cluster"], errors="coerce"))
-    invalid_clusters = cluster_values.isna() | (cluster_values.mod(1) != 0)
-    if invalid_clusters.to_numpy().any():
-        raise ValueError("Annotation map leiden_cluster values must be integers")
-
-    annotation_rows = annotation[[CELL_UID_COLUMN, "labels"]].copy()
-    annotation_rows["leiden_cluster"] = cluster_values.astype("Int64")
-    return {
-        str(uid): (label, cluster)
-        for uid, label, cluster in annotation_rows.itertuples(index=False, name=None)
-    }
-
-
-def attach_annotation_labels(data: pd.DataFrame, annotation_file: Path) -> pd.DataFrame:
-    """Attach labels and cluster IDs by stable cell UID.
-
-    Validate input UIDs, load and validate the annotation map, align annotations
-    to input rows by UID, then mark which rows received annotations. Unmatched
-    rows retain missing labels and cluster IDs.
-
-    Args:
-        data: Raw table with unique, non-null ``cell_uid`` values.
-        annotation_file: CSV containing ``cell_uid``, ``labels``, and
-            ``leiden_cluster`` columns.
-
-    Returns:
-        A copy of ``data`` with annotation columns added.
-
-    Raises:
-        ValueError: If the annotation file is absent, cell UIDs are invalid, or
-            annotation identifiers or values violate the required contract.
-    """
-    result = data.copy()
-
-    # Validate input identifiers before loading the annotation map.
-    if (
-        CELL_UID_COLUMN not in result.columns
-        or result[CELL_UID_COLUMN].isna().to_numpy().any()
-        or not result[CELL_UID_COLUMN].is_unique
-    ):
-        raise ValueError("Raw data cell_uid values must exist, be non-null and unique")
-
-    if not annotation_file.is_file():
-        raise ValueError("No annotations file found")
-
-    annotation = _read_annotation_rows(annotation_file)
-
-    # Index validated annotations by UID, then align them to input row order.
-    annotation_by_uid = _build_annotation_lookup(annotation)
-    annotation_rows = pd.DataFrame(
-        {
-            CELL_UID_COLUMN: list(annotation_by_uid),
-            "labels": [values[0] for values in annotation_by_uid.values()],
-            "leiden_cluster": [values[1] for values in annotation_by_uid.values()],
-        }
-    )
-    annotation_rows[CELL_UID_COLUMN] = annotation_rows[CELL_UID_COLUMN].astype("string")
-    annotation_rows = annotation_rows.set_index(CELL_UID_COLUMN)
-    input_uids = result[CELL_UID_COLUMN].astype("string")
-    matched_rows = annotation_rows.reindex(input_uids)
-
-    # Replace prior annotation columns before adding the aligned values.
-    result = result.drop(columns=["labels", "leiden_cluster"], errors="ignore")
-    result["labels"] = pd.array(matched_rows["labels"].to_numpy(), dtype="string")
-    result["leiden_cluster"] = pd.array(matched_rows["leiden_cluster"].to_numpy(), dtype="Int64")
-    print(result["labels"].notna().sum())
     return result
 
 

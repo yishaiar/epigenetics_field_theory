@@ -10,7 +10,6 @@ from .filtering import (
 )
 from .loading import (
     add_cell_uid,
-    attach_annotation_labels,
     load_raw_data,
     save_loading_summary,
     summarize_raw_data,
@@ -18,7 +17,6 @@ from .loading import (
 
 __all__ = [
     "add_cell_uid",
-    "attach_annotation_labels",
     "find_marker_column",
     "find_cd45_column",
     "load_raw_data",
