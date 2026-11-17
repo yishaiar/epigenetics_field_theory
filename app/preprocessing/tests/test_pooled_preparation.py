@@ -53,8 +53,10 @@ class PooledPreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "At least one input"):
             pool_csv_files([])
         with tempfile.TemporaryDirectory() as temporary:
-            with self.assertRaisesRegex(FileNotFoundError, "do not exist"):
-                pool_csv_files([Path(temporary) / "missing.csv"])
+            missing_file = Path(temporary) / "missing.csv"
+            with self.assertRaises(FileNotFoundError) as error:
+                pool_csv_files([missing_file])
+            self.assertIn(str(missing_file), str(error.exception))
 
     def test_pooled_histone_gate_uses_strict_thresholds_and_preserves_columns(self) -> None:
         data = pd.DataFrame(
