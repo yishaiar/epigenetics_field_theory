@@ -143,11 +143,11 @@ Keep this per-file — don't defer it to a single end-of-rebase summary, since t
 able to catch a wrong resolution before it's buried under several more commits' worth of
 `git rebase --continue`.
 
-After resolving each file, lint and format the owning `scbatch` member:
+After resolving each file, lint and format the owning `app` module:
 
 ```bash
-uv run ruff format scbatch/<member>
-uv run ruff check scbatch/<member>
+uv run ruff format app/<module>
+uv run ruff check app/<module>
 ```
 
 If the resolved file has a corresponding `test_*.py`, run it following

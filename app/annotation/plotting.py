@@ -2,179 +2,206 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-from typing import Any
+
+from app.config.config import METADATA_COLUMNS
 
 
 def plot_umap_staining(
     data: pd.DataFrame,
-    markers: list[str],
-    experiment: str,
+    output_root: Path,
     marker_group: str,
-    stain_out: Path,
+    markers: Sequence[str] | None = None,
+    *,
+    point_size: int = 4,
+    alpha: float = 0.85,
+    quantiles: tuple[float, float] = (0.01, 0.99),
+    cmap: str = "seismic",
+    condition_order: Sequence[str] = ("untreated", "treated", "parental"),
 ) -> list[dict[str, str]]:
-    """Save one seismic UMAP plot per available marker, split by condition.
+    """Save one condition-split UMAP staining plot per available marker.
 
     Args:
         data: Table containing UMAP coordinates, conditions, and marker values.
-        markers: Candidate marker columns to plot.
-        experiment: Experiment label used in output names and plot titles.
-        marker_group: Marker group label used in output names and titles.
-        stain_out: Root directory for staining plots.
+        output_root: Root directory for staining plot files.
+        marker_group: Name of the marker group used to create the embedding.
+        markers: Optional explicit marker panel; by default, all numeric columns
+            except metadata and UMAP coordinates are plotted.
+        point_size: Scatter point size.
+        alpha: Scatter point opacity.
+        quantiles: Lower and upper intensity limits used for color scaling.
+        cmap: Matplotlib color map used for marker staining.
+        condition_order: Preferred condition order before any remaining conditions.
 
     Returns:
         A record for each marker plot saved.
 
     Raises:
-        ValueError: If required coordinate or condition columns are absent, or
-            no non-null conditions are available.
+        ValueError: If required coordinates, rows, or non-null conditions are absent.
     """
-    output, present, conditions = _staining_setup(
-        data, markers, experiment, marker_group, stain_out
-    )
-    return [
-        _plot_one_marker(data, marker, conditions, experiment, marker_group, output)
-        for marker in present
-    ]
-
-
-def _staining_setup(
-    data: pd.DataFrame,
-    markers: list[str],
-    experiment: str,
-    marker_group: str,
-    stain_out: Path,
-) -> tuple[Path, list[str], list[str]]:
-    """Validate inputs and resolve marker, condition, and output selections.
-
-    Args:
-        data: Table containing coordinates, conditions, and marker columns.
-        markers: Candidate marker columns to plot.
-        experiment: Experiment label used to order preferred conditions.
-        marker_group: Marker group used in the output directory.
-        stain_out: Root directory for staining plots.
-
-    Returns:
-        The output directory, available markers, and ordered conditions.
-
-    Raises:
-        ValueError: If required columns, rows, or non-null conditions are absent.
-    """
-    missing = [column for column in ("UMAP1", "UMAP2", "condition") if column not in data]
+    required = ("UMAP1", "UMAP2", "condition")
+    missing = [column for column in required if column not in data]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
     if data.empty:
         raise ValueError("UMAP DataFrame is empty")
-    output = stain_out / f"staining_on_{marker_group}_UMAP" / "individual_marker_seismic"
-    output.mkdir(parents=True, exist_ok=True)
-    present = [m for m in markers if m in data and _numeric(data, m).notna().any()]
+
+    candidate_markers = (
+        list(markers)
+        if markers is not None
+        else [
+            column
+            for column in data.select_dtypes(include=[np.number]).columns
+            if column not in METADATA_COLUMNS and column not in required[:2]
+        ]
+    )
+    marker_values = {
+        marker: pd.Series(pd.to_numeric(pd.Series(data[marker]), errors="coerce"), dtype=float)
+        for marker in candidate_markers
+        if marker in data.columns
+    }
+    present = [marker for marker, values in marker_values.items() if values.notna().any()]
     conditions = data["condition"].dropna().unique().tolist()
-    preferred = {"all": ["untreated", "treated", "parental"]}.get(experiment, [])
-    conditions = [c for c in preferred if c in conditions] + [
-        c for c in conditions if c not in preferred
-    ]
     if not conditions:
-        raise ValueError(f"No conditions found for {experiment}")
-    return output, present, conditions
+        raise ValueError("No conditions found for UMAP staining")
+    conditions = [condition for condition in condition_order if condition in conditions] + [
+        condition for condition in conditions if condition not in condition_order
+    ]
+
+    output = output_root / f"staining_on_{marker_group}_UMAP" / f"individual_marker_{cmap}"
+    output.mkdir(parents=True, exist_ok=True)
+    records: list[dict[str, str]] = []
+    for marker in present:
+        values = marker_values[marker]
+        low, high = values.quantile(quantiles).tolist()
+        fig, axes = plt.subplots(
+            len(conditions),
+            1,
+            figsize=(7, 5.5 * len(conditions)),
+            sharex=True,
+            sharey=True,
+            squeeze=False,
+        )
+        for ax, condition in zip(axes.flatten(), conditions, strict=True):
+            condition_mask = data["condition"] == condition
+            points = ax.scatter(
+                data.loc[condition_mask, "UMAP1"],
+                data.loc[condition_mask, "UMAP2"],
+                c=values.loc[condition_mask],
+                s=point_size,
+                cmap=cmap,
+                vmin=low,
+                vmax=high,
+                alpha=alpha,
+                linewidths=0,
+                rasterized=True,
+            )
+            ax.set_title(f"{condition} — {marker}", fontsize=13)
+            fig.colorbar(points, ax=ax, fraction=0.046, pad=0.04).set_label(
+                f"{marker} z-score\n{quantiles[0]:.0%}–{quantiles[1]:.0%} quantiles clipped"
+            )
+        fig.suptitle(f"{marker_group} UMAP | {marker}", fontsize=15, y=1.01)
+        fig.tight_layout()
+        safe_marker = re.sub(r"\s+", "_", re.sub(r'[<>:"/\\|?*]', "_", marker))
+        out_file = output / f"{marker_group}_{safe_marker}_{cmap}_by_condition.png"
+        fig.savefig(out_file, dpi=300, bbox_inches="tight")
+        plt.show()
+        plt.close(fig)
+        records.append(
+            {
+                "umap_marker_group": marker_group,
+                "plot_type": f"individual_marker_{cmap}",
+                "marker": marker,
+                "plot_file": str(out_file),
+            }
+        )
+    return records
 
 
-def _plot_one_marker(
+def plot_umap_class_probabilities(
     data: pd.DataFrame,
-    marker: str,
-    conditions: list[str],
-    experiment: str,
-    marker_group: str,
-    output: Path,
-) -> dict[str, str]:
-    """Create one marker's condition-split plot and its output record.
+    probabilities: np.ndarray,
+    class_labels: np.ndarray,
+    out_file: Path,
+    *,
+    point_size: int = 4,
+    alpha: float = 0.85,
+    cmap: str = "seismic",
+    condition_order: Sequence[str] = ("untreated", "treated", "parental"),
+) -> None:
+    """Save condition-split UMAP panels for probabilities across all cells.
 
     Args:
-        data: Cell table containing coordinates, conditions, and marker values.
-        marker: Marker column to plot.
-        conditions: Conditions to plot, in panel order.
-        experiment: Experiment label used in the title and filename.
-        marker_group: Marker group used in the title and filename.
-        output: Directory where the plot is saved.
+        data: Table containing UMAP coordinates and condition values.
+        probabilities: Probability matrix, one row per data row and one column
+            per class label.
+        class_labels: Class labels in the same order as the probability columns.
+        out_file: Destination PNG path.
+        point_size: Scatter point size.
+        alpha: Scatter point opacity.
+        cmap: Matplotlib color map used for class probabilities.
+        condition_order: Preferred condition order before any remaining conditions.
 
-    Returns:
-        A record describing the saved marker plot.
+    Raises:
+        ValueError: If coordinates, conditions, or probability dimensions do not align.
     """
-    values = _numeric(data, marker)
-    low, high = values.quantile(0.01), values.quantile(0.99)
+    required = {"UMAP1", "UMAP2", "condition"}
+    if missing := required.difference(data.columns):
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+    values = np.asarray(probabilities, dtype=float)
+    labels = np.asarray(class_labels)
+    if values.ndim != 2 or values.shape[0] != len(data):
+        raise ValueError("Probability rows must match all UMAP rows")
+    if values.shape[1] != len(labels):
+        raise ValueError("Probability columns must match the class labels")
+
+    selected = data.loc[:, ["UMAP1", "UMAP2", "condition"]].reset_index(drop=True)
+    conditions = selected["condition"].dropna().unique().tolist()
+    if not conditions:
+        raise ValueError("No conditions found for probability plots")
+    preferred = [condition for condition in condition_order if condition in conditions]
+    conditions = preferred + [condition for condition in conditions if condition not in preferred]
     fig, axes = plt.subplots(
+        len(labels),
         len(conditions),
-        1,
-        figsize=(7, 5.5 * len(conditions)),
+        figsize=(6 * len(conditions), 5 * len(labels)),
         sharex=True,
         sharey=True,
         squeeze=False,
     )
-    _draw_marker_conditions(fig, axes.flatten(), data, marker, conditions, low, high)
-    fig.suptitle(f"{experiment} | {marker_group} UMAP | {marker}", fontsize=15, y=1.01)
+    class_names = {0: "classical", 1: "basal"}
+    for class_index, class_label in enumerate(labels):
+        class_name = class_names.get(int(class_label), str(class_label))
+        for condition_index, condition in enumerate(conditions):
+            condition_mask = selected["condition"].to_numpy() == condition
+            points = axes[class_index, condition_index].scatter(
+                selected.loc[condition_mask, "UMAP1"],
+                selected.loc[condition_mask, "UMAP2"],
+                c=values[condition_mask, class_index],
+                s=point_size,
+                cmap=cmap,
+                vmin=0,
+                vmax=1,
+                alpha=alpha,
+                linewidths=0,
+                rasterized=True,
+            )
+            axes[class_index, condition_index].set(
+                title=f"{condition} | P({class_name})",
+                xlabel="UMAP1",
+                ylabel="UMAP2",
+                aspect="equal",
+            )
+            fig.colorbar(points, ax=axes[class_index, condition_index], label=f"P({class_name})")
+    fig.suptitle("XGBoost class probabilities for all cells", fontsize=15)
     fig.tight_layout()
-    safe_marker = re.sub(r"\s+", "_", re.sub(r'[<>:"/\\|?*]', "_", marker))
-    out_file = output / f"{experiment}_{marker_group}_{safe_marker}_seismic_by_condition.png"
+    out_file.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_file, dpi=300, bbox_inches="tight")
     plt.show()
     plt.close(fig)
-    return {
-        "umap_marker_group": marker_group,
-        "experiment": experiment,
-        "plot_type": "individual_marker_seismic",
-        "marker": marker,
-        "plot_file": str(out_file),
-    }
-
-
-def _draw_marker_conditions(
-    fig: Any,
-    axes: Any,
-    data: pd.DataFrame,
-    marker: str,
-    conditions: list[str],
-    low: float,
-    high: float,
-) -> None:
-    """Draw one UMAP scatter panel and colorbar for each selected condition.
-
-    Each panel uses the requested marker values as colors on the shared
-    ``UMAP1``/``UMAP2`` coordinates. All panels share the supplied color limits
-    and the seismic colormap, with the colorbar identifying the clipped value
-    range.
-
-    Args:
-        fig: Figure that owns the axes and receives their colorbars.
-        axes: Matplotlib axes, in the same order as ``conditions``.
-        data: Table containing coordinates, condition values, and marker data.
-        marker: Marker column to use for point colors.
-        conditions: Conditions to plot, one per axis.
-        low: Lower color scale bound shared by all panels.
-        high: Upper color scale bound shared by all panels.
-    """
-    for ax, condition in zip(axes, conditions):
-        subset = pd.DataFrame(data.loc[data["condition"] == condition])
-        points = ax.scatter(
-            subset["UMAP1"],
-            subset["UMAP2"],
-            c=_numeric(subset, marker),
-            s=4,
-            cmap="seismic",
-            vmin=low,
-            vmax=high,
-            alpha=0.85,
-            linewidths=0,
-            rasterized=True,
-        )
-        ax.set_title(f"{condition} — {marker}", fontsize=13)
-        fig.colorbar(points, ax=ax, fraction=0.046, pad=0.04).set_label(
-            f"{marker} z-score\n1st–99th percentile clipped"
-        )
-
-
-def _numeric(data: pd.DataFrame, marker: str) -> Any:
-    """Return the runtime Series while accommodating Pandas' broad column type."""
-    return pd.Series(pd.to_numeric(pd.Series(data[marker]), errors="coerce"), dtype=float)

@@ -62,7 +62,7 @@ def calc_leiden(
 
 def plot_clusters(
     data: pd.DataFrame,
-    labels: np.ndarray,
+    labels: pd.Series,
     title: str,
     out_file: Path,
     point_size: int = 4,

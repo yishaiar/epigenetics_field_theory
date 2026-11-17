@@ -23,13 +23,13 @@ The current workflow passes tabular data and CSV artifacts between stages:
 ```text
 input CSV files
     |
-    +-- app.preprocessing  loading, gating, filtering, and arcsinh transformation
-    +-- app.harmonization  normalization, balancing, batch correction, and scaling
+    +-- app.cell_selection  raw loading, filtering, and cell selection
+    +-- app.preprocessing  gating, ArcSinh transformation, normalization, batch correction, and scaling
     +-- app.annotation     UMAP, clustering, labels, and staining plots
     +-- app.analysis       biological comparisons and distribution analyses
 ```
 
-The notebooks `01_preprocessing.ipynb`, `02_harmonization.ipynb`, `03_annotation.ipynb`, and `04_analysis.ipynb` correspond to those stages. Keep file boundaries, output paths, and table schemas explicit when passing data between stages. Workflow CSVs should be written without an implicit index unless a specific artifact contract requires one.
+The notebooks `01_cell_selection.ipynb`, `02_preprocessing.ipynb`, `03_annotation.ipynb`, and `04_analysis.ipynb` correspond to those stages. Keep file boundaries, output paths, and table schemas explicit when passing data between stages. Workflow CSVs should be written without an implicit index unless a specific artifact contract requires one.
 
 Current workflow functions primarily accept and return pandas DataFrames or filesystem paths. Raw input CSVs live in the local, Git-ignored `raw_data/` directory; generated workflow outputs remain under `results/experiment_<ddmmyy>/`. Validate required columns before processing, preserve row and marker alignment, and keep public function signatures typed. Use Pydantic v2 when introducing public request, configuration, or result schemas.
 
@@ -37,8 +37,8 @@ Current workflow functions primarily accept and return pandas DataFrames or file
 
 ```text
 app/
-├── preprocessing/  # raw loading, filtering, gating, and transformation
-├── harmonization/  # normalization, balancing, correction, and scaling
+├── cell_selection/ # raw loading, filtering, and cell selection
+├── preprocessing/  # gating, ArcSinh transformation, normalization, correction, and scaling
 ├── annotation/     # embeddings, clustering, labeling, and plots
 └── analysis/       # biological comparisons and KDE analyses
 notebooks/          # one notebook per workflow stage

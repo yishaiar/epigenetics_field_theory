@@ -46,8 +46,8 @@ codex
 `UV_PROJECT_ENVIRONMENT=$(pwd)/.venv` ensures that each worktree has its own
 virtual environment. Do not share `.venv` directories between worktrees.
 
-The project loads optional local variables from `app/dotenv/.env`.
-Copy `app/dotenv/.env.example` to `app/dotenv/.env` in each checkout.
+The project loads optional local variables from `app/config/.env`.
+Copy `app/config/.env.example` to `app/config/.env` in each checkout.
 `RUN_DATE` may be set there to select an explicit experiment date; leave it
 blank to use the current date in `ddmmyy` format. Git worktrees do not copy
 ignored `.env` files, so create one in each worktree that needs local settings.

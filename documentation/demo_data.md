@@ -9,14 +9,14 @@ stays local and is ignored by Git.
 Generate or refresh it from the repository root:
 
 ```bash
-uv run python -m app.preprocessing.demo_data
+uv run python -m app.cell_selection.demo_data
 ```
 
 This writes sampled CSVs under `demo_data/raw_data/` and a manifest at
 `demo_data/demo_dataset_manifest.csv`. It does not modify `raw_data/`.
 
 To run the notebooks against the fixture, set `DEMO_MODE=true` in
-`app/dotenv/.env`, then restart the notebook kernels and run notebooks 00
+`app/config/.env`, then restart the notebook kernels and run notebooks 00
 through 04 in order. Demo outputs go to `results/demo/experiment_<ddmmyy>/`.
 Leave `DEMO_MODE=false` for the normal full-data run, whose output location
 remains `results/experiment_<ddmmyy>/`.

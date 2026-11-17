@@ -1,26 +1,32 @@
-approvals_reviewer = "user"
-#approvals_reviewer = "auto_review"
+# low: Routine edits and straightforward tests
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+
+# medium: Planning, implementation, and complex debugging
+# model = "gpt-6.1-sol"
+# model_reasoning_effort = "medium"
+
+
+#approvals_reviewer = "user"
+approvals_reviewer = "auto_review"
 
 approval_policy = "on-request" # Codex decides when to ask for permission
-#approval_policy = "never" # Codex never asks, restricted actions simply fail.
-
-#sandbox_mode = "danger-full-access" #removes sandbox filesystem restrictions, including outside the repository.
 sandbox_mode = "workspace-write" #all normal workspace files are writable (.agents, .codex, and .git remain protected)
 
-personality = "pragmatic"
-model = "gpt-6-luna"
-model_reasoning_effort = "medium"
+#approval_policy = "never" # Codex never asks, restricted actions simply fail.
+#sandbox_mode = "danger-full-access" #removes sandbox filesystem restrictions, including outside the repository.
 
+
+[sandbox_workspace_write]
+network_access = true
+writable_roots = ["/Users/yishai/Desktop/build_pip_package/scbatch/.agents"]
+
+
+personality = "pragmatic"
 [tui]
 raw_output_mode = true
 fullscreen_transcript = false
 alternate_screen = "never"
-
-
-
-[sandbox_workspace_write]
-writable_roots = ["/Users/yishai/Desktop/build_pip_package/scbatch/.agents"]
-
 
 [features]
 memories = true

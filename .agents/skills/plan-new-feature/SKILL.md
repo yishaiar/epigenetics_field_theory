@@ -16,7 +16,7 @@ already active.
 1. **Clarify before planning** — if the requirement is ambiguous, ask 1–2
    focused questions before drafting anything
 2. **Check module-specific conventions** — read the root `AGENTS.md` and the
-   touched `scbatch/<module>/` package before planning
+   touched `app/<module>/` package before planning
 3. **Enumerate the touchpoints** — which files/layers change, in what
    order, and what new types/schemas are needed
 4. **Enumerate the tests needed** — at least one happy path + one failure
